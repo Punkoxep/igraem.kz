@@ -115,9 +115,14 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
           {/* List of Incoming User Requests for this venue */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden w-full">
             {currentVenueData.requests.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium space-y-1">
-                <Users className="w-8 h-8 mx-auto text-slate-300 stroke-1" />
-                <p>Запросов пока нет</p>
+              <div className="p-8 text-center text-slate-500 text-xs font-medium space-y-2">
+                <div className="w-12 h-12 mx-auto rounded-full bg-[#E8F8F0] text-[#00B050] flex items-center justify-center">
+                  <Check className="w-6 h-6 stroke-[2.5]" />
+                </div>
+                <p className="font-bold text-slate-800 text-sm">Все входящие запросы обработаны</p>
+                <p className="text-slate-400 text-xs">
+                  Новые заявки от желающих присоединиться игроков отобразятся здесь.
+                </p>
               </div>
             ) : (
               currentVenueData.requests.map((req) => (

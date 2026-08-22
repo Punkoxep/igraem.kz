@@ -94,6 +94,8 @@ router.post('/join-requests', authenticateJwt, BookingsController.requestJoinSlo
 router.get('/join-requests/my', authenticateJwt, BookingsController.getMyJoinRequests as any);
 router.get('/join-requests/incoming', authenticateJwt, BookingsController.getHostIncomingRequests as any);
 router.get('/join-requests', authenticateJwt, BookingsController.getHostIncomingRequests as any);
+router.get('/requests/incoming', authenticateJwt, BookingsController.getHostIncomingRequests as any);
+router.get('/requests', authenticateJwt, BookingsController.getHostIncomingRequests as any);
 router.patch('/join-requests/:id/approve', authenticateJwt, (req: any, res: any, next: any) => {
   req.params.requestId = req.params.id;
   req.body.status = 'APPROVED';

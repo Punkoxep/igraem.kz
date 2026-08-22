@@ -74,9 +74,9 @@ export const App: React.FC = () => {
   // Handle direct URL routing and Push notification links (e.g. /requests?tab=incoming)
   useEffect(() => {
     const handleUrlRouting = () => {
-      if (typeof window === 'undefined') return;
       const url = new URL(window.location.href);
       const pathname = url.pathname.toLowerCase();
+      const bookingIdParam = url.searchParams.get('id') || url.searchParams.get('bookingId');
       const tabParam = url.searchParams.get('tab');
       const filterParam = url.searchParams.get('filter');
 
@@ -85,7 +85,7 @@ export const App: React.FC = () => {
         if (tabParam === 'incoming' || filterParam === 'incoming' || pathname.includes('/requests')) {
           setRequestsSubTab(tabParam === 'my' ? 'my' : 'incoming');
         }
-      } else if (pathname.includes('/bookings')) {
+      } else if (pathname.includes('/bookings') || bookingIdParam) {
         setActiveTab('bookings');
       } else if (pathname.includes('/favorites')) {
         setActiveTab('favorites');

@@ -1947,7 +1947,7 @@ export class BookingsController {
         where: { id: requestId },
         include: {
           booking: {
-            include: { guests: true },
+            include: { guests: true, ground: true },
           },
         },
       });
@@ -2001,54 +2001,57 @@ export class BookingsController {
         data: { status },
       });
 
+      // Find applicant user
+      const applicantUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { iin: joinRequest.user_iin },
+            { phone_number: joinRequest.user_phone },
+          ],
+        },
+      });
+
       // If approved, automatically add or reactivate applicant as an approved guest in BookingGuest
-      if (status === 'APPROVED') {
-        const fullRequest = await prisma.joinRequest.findUnique({
-          where: { id: requestId },
-          include: { booking: true },
+      if (status === 'APPROVED' && applicantUser) {
+        const existingGuest = await prisma.bookingGuest.findUnique({
+          where: {
+            booking_id_user_id: {
+              booking_id: joinRequest.booking_id,
+              user_id: applicantUser.id,
+            },
+          },
         });
 
-        if (fullRequest) {
-          const applicantUser = await prisma.user.findFirst({
-            where: {
-              OR: [
-                { iin: fullRequest.user_iin },
-                { phone_number: fullRequest.user_phone },
-              ],
+        if (existingGuest) {
+          await prisma.bookingGuest.update({
+            where: { id: existingGuest.id },
+            data: {
+              status: 'approved',
+              checked_in_at: new Date(),
             },
           });
-
-          if (applicantUser) {
-            const existingGuest = await prisma.bookingGuest.findUnique({
-              where: {
-                booking_id_user_id: {
-                  booking_id: fullRequest.booking_id,
-                  user_id: applicantUser.id,
-                },
-              },
-            });
-
-            if (existingGuest) {
-              await prisma.bookingGuest.update({
-                where: { id: existingGuest.id },
-                data: {
-                  status: 'approved',
-                  checked_in_at: new Date(),
-                },
-              });
-            } else {
-              await prisma.bookingGuest.create({
-                data: {
-                  booking_id: fullRequest.booking_id,
-                  user_id: applicantUser.id,
-                  type: 'invited',
-                  status: 'approved',
-                  checked_in_at: new Date(),
-                },
-              });
-            }
-          }
+        } else {
+          await prisma.bookingGuest.create({
+            data: {
+              booking_id: joinRequest.booking_id,
+              user_id: applicantUser.id,
+              type: 'invited',
+              status: 'approved',
+              checked_in_at: new Date(),
+            },
+          });
         }
+      }
+
+      // Send Web Push notification to Applicant about Approval or Rejection
+      if (applicantUser) {
+        const groundName = (joinRequest.booking as any)?.ground?.name || 'площадке';
+        NotificationService.sendJoinRequestStatusPushToApplicant(
+          applicantUser.id,
+          status as 'APPROVED' | 'REJECTED',
+          groundName,
+          joinRequest.booking_id
+        ).catch((err) => console.warn('[BookingsController.respondJoinRequest] Push error:', err.message));
       }
 
       return res.json({

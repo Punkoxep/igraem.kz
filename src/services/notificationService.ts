@@ -242,6 +242,86 @@ export class NotificationService {
   }
 
   /**
+   * Send Web Push notification to Applicant (Player) when Organizer approves or rejects their join request
+   */
+  public static async sendJoinRequestStatusPushToApplicant(
+    applicantUserId: string,
+    status: 'APPROVED' | 'REJECTED',
+    groundName: string,
+    bookingId: string
+  ) {
+    try {
+      if (!applicantUserId) return;
+
+      const user = await prisma.user.findUnique({
+        where: { id: applicantUserId },
+        include: {
+          pushSubscriptions: true,
+        },
+      });
+
+      if (!user) return;
+
+      const isApproved = status === 'APPROVED';
+      const title = isApproved ? 'Вас добавили в игру! ⚽🎉' : 'Запрос на игру ⚽';
+      const body = isApproved
+        ? `Организатор одобрил ваш запрос на площадку "${groundName}". Доступ к слоту открыт!`
+        : `К сожалению, организатор отклонил запрос на участие в брони на площадке "${groundName}".`;
+      const icon = '/icons/icon-192x192.png';
+      const badge = '/icons/badge-72x72.png';
+      const vibrate = isApproved ? [200, 100, 200] : [100, 100, 100];
+      const targetUrl = isApproved ? `/bookings?id=${bookingId}` : '/requests?tab=my';
+
+      const payload = {
+        title,
+        body,
+        icon,
+        badge,
+        tag: `booking-${isApproved ? 'accepted' : 'declined'}-${bookingId}`,
+        renotify: true,
+        requireInteraction: true,
+        vibrate,
+        silent: false,
+        data: {
+          url: targetUrl,
+          bookingId,
+        },
+      };
+
+      const subscriptionsToSend: any[] = [];
+
+      if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
+        for (const sub of user.pushSubscriptions) {
+          subscriptionsToSend.push({
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
+          });
+        }
+      } else if (user.push_subscription) {
+        try {
+          subscriptionsToSend.push(JSON.parse(user.push_subscription));
+        } catch (e) {}
+      }
+
+      console.log(`[PushNotification] Sending join-request status (${status}) push to applicant: ${applicantUserId} (${user.full_name}). Found subscriptions: ${subscriptionsToSend.length}`);
+
+      if (subscriptionsToSend.length === 0) {
+        console.log(`[PushNotification] Applicant ${user.full_name} (${applicantUserId}) has no active push subscriptions.`);
+        return;
+      }
+
+      for (const sub of subscriptionsToSend) {
+        await this.sendPush(sub, payload);
+      }
+    } catch (error: any) {
+      console.error('[NotificationService.sendJoinRequestStatusPushToApplicant] Error:', error.message);
+    }
+  }
+
+  /**
    * Send test push notification directly to authenticated user
    */
   public static async sendTestPush(userId: string) {

@@ -1,11 +1,8 @@
 node_modules
-client/node_modules
 npm-debug.log
 .git
 .gitignore
 dist
 build
-client/dist
-.env
 .env.local
 *.md

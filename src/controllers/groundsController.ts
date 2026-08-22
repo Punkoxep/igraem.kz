@@ -13,7 +13,7 @@ export class GroundsController {
           gateways: true,
           reviews: true,
           bookings: {
-            where: { status: 'confirmed' },
+            where: { status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] } },
             select: {
               id: true,
               booking_date: true,
@@ -123,7 +123,7 @@ export class GroundsController {
         where: {
           ground_id: ground.id,
           booking_date: currentDateStr,
-          status: 'confirmed',
+          status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
         },
         include: {
           host_user: {

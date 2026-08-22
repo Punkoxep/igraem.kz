@@ -20,7 +20,7 @@ export class BookingsController {
     const activeBookings = await prisma.booking.findMany({
       where: {
         booking_date: bookingDate,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
         ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
         OR: [
           { host_user_id: userId },
@@ -163,7 +163,7 @@ export class BookingsController {
         where: {
           host_user_id: req.user.id,
           booking_date: normalizedBookingDate,
-          status: { in: ['confirmed', 'active', 'upcoming'] },
+          status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
         },
       });
 
@@ -186,7 +186,7 @@ export class BookingsController {
         where: {
           ground_id: actualGroundId,
           booking_date: normalizedBookingDate,
-          status: { in: ['confirmed', 'active', 'upcoming'] },
+          status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
           OR: [
             {
               start_time: { lte: start_time },
@@ -462,10 +462,26 @@ export class BookingsController {
           where: { id },
           data: { status: 'completed' },
         });
+
+        // Mark all guest participants as completed
+        await prisma.bookingGuest.updateMany({
+          where: { booking_id: id },
+          data: { status: 'completed' },
+        });
+
+        // Cancel any pending join requests
+        await prisma.joinRequest.updateMany({
+          where: {
+            booking_id: id,
+            status: { in: ['PENDING', 'pending'] },
+          },
+          data: { status: 'CANCELLED' },
+        });
+
         return res.json({
           success: true,
           isHost: true,
-          message: 'Бронирование успешно завершено организатором',
+          message: 'Бронирование успешно завершено организатором, слот освобожден',
           data: updated,
         });
       }
@@ -532,16 +548,31 @@ export class BookingsController {
       const isHost = booking.host_user_id === req.user.id || req.user.role === 'admin';
 
       if (isHost) {
-        // Organizer: Complete the entire booking for everyone
+        // Organizer: Complete the entire booking for everyone and free the slot
         const updated = await prisma.booking.update({
           where: { id },
           data: { status: 'completed' },
         });
 
+        // Mark all guest participants as completed
+        await prisma.bookingGuest.updateMany({
+          where: { booking_id: id },
+          data: { status: 'completed' },
+        });
+
+        // Cancel any pending join requests
+        await prisma.joinRequest.updateMany({
+          where: {
+            booking_id: id,
+            status: { in: ['PENDING', 'pending'] },
+          },
+          data: { status: 'CANCELLED' },
+        });
+
         return res.json({
           success: true,
           isHost: true,
-          message: 'Бронирование успешно завершено',
+          message: 'Бронирование успешно завершено, слот освобожден',
           data: updated,
         });
       }
@@ -1063,7 +1094,7 @@ export class BookingsController {
       }
 
       const whereClause: any = {
-        status: { in: ['confirmed', 'active'] },
+        status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
       };
 
       if (targetGroundId) {
@@ -1163,7 +1194,7 @@ export class BookingsController {
       }
 
       const whereClause: any = {
-        status: { in: ['confirmed', 'active', 'upcoming'] },
+        status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
       };
 
       if (groundId) {

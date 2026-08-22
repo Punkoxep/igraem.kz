@@ -44,9 +44,38 @@ export const App: React.FC = () => {
   // i18n Language state
   const [currentLang, setCurrentLang] = useState<Language>('ru');
 
-  // Navigation & Location
+  // Navigation & Location - initialize state from current URL
+  const getTabFromLocation = (): ActiveTab => {
+    if (typeof window === 'undefined') return 'map';
+    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+    const params = new URLSearchParams(window.location.search);
+
+    if (path === '/bookings' || path.startsWith('/bookings/') || params.has('id') || params.has('bookingid')) {
+      return 'bookings';
+    }
+    if (path === '/requests' || path.startsWith('/requests/')) {
+      return 'requests';
+    }
+    if (path === '/favorites' || path.startsWith('/favorites/')) {
+      return 'favorites';
+    }
+    if (path === '/profile' || path.startsWith('/profile/')) {
+      return 'profile';
+    }
+    return 'map';
+  };
+
+  const getRequestsSubTabFromLocation = (): 'my' | 'incoming' => {
+    if (typeof window === 'undefined') return 'my';
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const filter = params.get('filter');
+    if (tab === 'incoming' || filter === 'incoming') return 'incoming';
+    return 'my';
+  };
+
   const [currentCity, setCurrentCity] = useState<CityName>('Темиртау');
-  const [activeTab, setActiveTab] = useState<ActiveTab>('map');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getTabFromLocation);
 
   // Filters - Football active by default
   const [selectedSport, setSelectedSport] = useState<SportType>('football');
@@ -69,34 +98,42 @@ export const App: React.FC = () => {
   // Requests state (clean empty array by default, loaded from API)
   const [myRequests, setMyRequests] = useState<MyRequestItem[]>([]);
   const [incomingVenueRequests, setIncomingVenueRequests] = useState<VenueIncomingRequests[]>([]);
-  const [requestsSubTab, setRequestsSubTab] = useState<'my' | 'incoming'>('incoming');
+  const [requestsSubTab, setRequestsSubTab] = useState<'my' | 'incoming'>(getRequestsSubTabFromLocation);
 
-  // Handle direct URL routing and Push notification links (e.g. /requests?tab=incoming)
+  // Handle Tab changes with URL synchronization (updates browser address bar & history)
+  const handleTabChange = useCallback((newTab: ActiveTab, subTab?: 'my' | 'incoming') => {
+    setActiveTab(newTab);
+    if (newTab === 'requests') {
+      const chosenSubTab = subTab || requestsSubTab;
+      setRequestsSubTab(chosenSubTab);
+    }
+
+    if (typeof window !== 'undefined') {
+      let targetPath = '/';
+      if (newTab === 'bookings') targetPath = '/bookings';
+      else if (newTab === 'requests') targetPath = (subTab || requestsSubTab) === 'incoming' ? '/requests?tab=incoming' : '/requests';
+      else if (newTab === 'favorites') targetPath = '/favorites';
+      else if (newTab === 'profile') targetPath = '/profile';
+
+      const currentFull = window.location.pathname + window.location.search;
+      if (currentFull !== targetPath && (targetPath !== '/' || (window.location.pathname !== '/' && window.location.pathname !== ''))) {
+        window.history.pushState({ tab: newTab }, '', targetPath);
+      }
+    }
+  }, [requestsSubTab]);
+
+  // Synchronize on browser Back / Forward buttons & PopState events
   useEffect(() => {
-    const handleUrlRouting = () => {
-      const url = new URL(window.location.href);
-      const pathname = url.pathname.toLowerCase();
-      const bookingIdParam = url.searchParams.get('id') || url.searchParams.get('bookingId');
-      const tabParam = url.searchParams.get('tab');
-      const filterParam = url.searchParams.get('filter');
-
-      if (pathname.includes('/requests') || tabParam === 'incoming' || tabParam === 'my' || filterParam === 'incoming') {
-        setActiveTab('requests');
-        if (tabParam === 'incoming' || filterParam === 'incoming' || pathname.includes('/requests')) {
-          setRequestsSubTab(tabParam === 'my' ? 'my' : 'incoming');
-        }
-      } else if (pathname.includes('/bookings') || bookingIdParam) {
-        setActiveTab('bookings');
-      } else if (pathname.includes('/favorites')) {
-        setActiveTab('favorites');
-      } else if (pathname.includes('/profile')) {
-        setActiveTab('profile');
+    const handlePopState = () => {
+      const tab = getTabFromLocation();
+      setActiveTab(tab);
+      if (tab === 'requests') {
+        setRequestsSubTab(getRequestsSubTabFromLocation());
       }
     };
 
-    handleUrlRouting();
-    window.addEventListener('popstate', handleUrlRouting);
-    return () => window.removeEventListener('popstate', handleUrlRouting);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Fetch grounds from API
@@ -815,7 +852,7 @@ export const App: React.FC = () => {
           onClose={() => setCurrentBookingSuccess(null)}
           onGoToBookings={() => {
             setCurrentBookingSuccess(null);
-            setActiveTab('bookings');
+            handleTabChange('bookings');
           }}
           onOpenVenue={handleOpenVenue}
           onCancelBooking={handleCancelBooking}
@@ -837,7 +874,7 @@ export const App: React.FC = () => {
 
       <BottomNav
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         bookingsCount={activeBookingsCount}
         requestsCount={totalPendingRequestsCount}
         favoritesCount={favoriteVenues.length}

@@ -29,11 +29,19 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
       if (tab === 'incoming' || filter === 'incoming') return 'incoming';
       if (tab === 'my' || filter === 'my') return 'my';
     }
-    return initialSubTab || 'incoming';
+    return initialSubTab || 'my';
   };
 
   const [activeSubTab, setActiveSubTab] = useState<'my' | 'incoming'>(getInitialSubTab);
   const [selectedVenueForRequests, setSelectedVenueForRequests] = useState<VenueIncomingRequests | null>(null);
+
+  const handleSubTabClick = (tab: 'my' | 'incoming') => {
+    setActiveSubTab(tab);
+    if (typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/requests')) {
+      const targetUrl = tab === 'incoming' ? '/requests?tab=incoming' : '/requests';
+      window.history.replaceState({ tab: 'requests', subTab: tab }, '', targetUrl);
+    }
+  };
 
   React.useEffect(() => {
     if (initialSubTab) {
@@ -183,7 +191,7 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveSubTab('my')}
+            onClick={() => handleSubTabClick('my')}
             className={`relative z-10 flex-1 h-9 px-2 text-xs text-center flex items-center justify-center transition-colors duration-200 ${
               activeSubTab === 'my'
                 ? 'text-[#00B050] font-semibold'
@@ -194,7 +202,7 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveSubTab('incoming')}
+            onClick={() => handleSubTabClick('incoming')}
             className={`relative z-10 flex-1 h-9 px-2 text-xs text-center flex items-center justify-center transition-colors duration-200 ${
               activeSubTab === 'incoming'
                 ? 'text-[#00B050] font-semibold'

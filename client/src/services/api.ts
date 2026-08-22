@@ -272,7 +272,16 @@ class ApiService {
   }
 
   // --- Locks / Access Control APIs ---
-  public async unlockDoor(payload: { bookingId?: string; qrCode?: string }): Promise<{ success: boolean; message?: string; data?: any }> {
+  public async unlockDoor(payload: {
+    bookingId?: string;
+    booking_id?: string;
+    qrCode?: string;
+    qr_code_token?: string;
+    latitude?: number;
+    longitude?: number;
+    userLatitude?: number;
+    userLongitude?: number;
+  }): Promise<{ success: boolean; message?: string; data?: any; doorUnlocked?: boolean }> {
     return this.request('/locks/unlock', {
       method: 'POST',
       body: JSON.stringify(payload),

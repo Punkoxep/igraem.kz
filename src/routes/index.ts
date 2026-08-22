@@ -133,6 +133,8 @@ router.post('/grounds/qr-check-in', authenticateJwt, BookingsController.spontane
 router.get('/locks/status', LocksController.getLockStatus as any);
 router.get('/locks/:lockId/status', LocksController.getLockStatus as any);
 router.post('/locks/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
+router.post('/locks/:id/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
+router.post('/bookings/:id/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-button', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-qr', authenticateJwt, LocksController.unlockByDoorQr as any);
 router.get('/locks/active-access', authenticateJwt, LocksController.getActiveAccess as any);

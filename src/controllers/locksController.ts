@@ -28,7 +28,7 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { booking_id, userLatitude, user_latitude, userLongitude, user_longitude } = req.body;
+      const booking_id = req.body.booking_id || req.body.bookingId || req.params.id;
 
       const { dateStr: currentDateStr, timeStr: currentTimeStr } = getLocalNow();
 
@@ -90,7 +90,10 @@ export class LocksController {
         (r) => (r.user_iin === req.user?.iin || r.user_phone === req.user?.phone_number) && r.status === 'APPROVED'
       );
 
-      if (!isHost && !isApprovedGuest && !isApprovedJoinRequest) {
+      const userRole = (req.user.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+
+      if (!isHost && !isApprovedGuest && !isApprovedJoinRequest && !isAdmin) {
         return res.status(403).json({
           success: false,
           message: 'У вас нет доступа к этой брони для разблокировки замка',
@@ -122,7 +125,7 @@ export class LocksController {
       const bookingEndDate = new Date(bY, bM - 1, bD, endH || 0, endM || 0, 0, 0);
       const unlockAllowedTime = new Date(bookingStartDate.getTime() - 10 * 60 * 1000); // 10 mins before slot start
 
-      if (now.getTime() < unlockAllowedTime.getTime()) {
+      if (!isAdmin && now.getTime() < unlockAllowedTime.getTime()) {
         const diffMins = Math.ceil((bookingStartDate.getTime() - now.getTime()) / (60 * 1000));
         return res.status(403).json({
           success: false,
@@ -131,7 +134,7 @@ export class LocksController {
         });
       }
 
-      if (now.getTime() >= bookingEndDate.getTime()) {
+      if (!isAdmin && now.getTime() >= bookingEndDate.getTime()) {
         return res.status(403).json({
           success: false,
           doorUnlocked: false,
@@ -139,25 +142,46 @@ export class LocksController {
         });
       }
 
-      // GPS Geolocation Check (Haversine Formula) - Bypassed for Admin / Anton Ivkin for remote testing
-      const isAdminOrAnton = req.user.role === 'admin' || req.user.full_name?.includes('Ивкин Антон') || req.user.iin === '890918350184';
+      // GPS Geolocation Check (Haversine Formula) - Strictly required and enforced (50m radius) for non-admin users
+      if (!isAdmin) {
+        const rawLat = req.body.latitude ?? req.body.userLatitude ?? req.body.user_latitude ?? req.body.lat;
+        const rawLon = req.body.longitude ?? req.body.userLongitude ?? req.body.user_longitude ?? req.body.lng;
 
-      if (!isAdminOrAnton) {
-        const userLat = userLatitude !== undefined ? Number(userLatitude) : (user_latitude !== undefined ? Number(user_latitude) : booking.ground.latitude);
-        const userLon = userLongitude !== undefined ? Number(userLongitude) : (user_longitude !== undefined ? Number(user_longitude) : booking.ground.longitude);
+        if (
+          rawLat === undefined ||
+          rawLat === null ||
+          rawLat === '' ||
+          isNaN(Number(rawLat)) ||
+          rawLon === undefined ||
+          rawLon === null ||
+          rawLon === '' ||
+          isNaN(Number(rawLon))
+        ) {
+          return res.status(400).json({
+            success: false,
+            doorUnlocked: false,
+            message: 'Требуется передача геопозиции для открытия замка',
+          });
+        }
 
+        const userLat = Number(rawLat);
+        const userLon = Number(rawLon);
         const distanceMeters = calculateDistanceMeters(userLat, userLon, booking.ground.latitude, booking.ground.longitude);
         const allowedRadius = booking.ground.allowed_radius_meters || 50;
 
         if (distanceMeters > allowedRadius) {
-          return res.status(400).json({
+          const distanceFormatted = distanceMeters >= 1000
+            ? `${(distanceMeters / 1000).toFixed(1)} км`
+            : `${Math.round(distanceMeters)} м`;
+
+          return res.status(403).json({
             success: false,
             doorUnlocked: false,
-            message: `Вы находитесь слишком далеко от площадки (расстояние ${Math.round(distanceMeters)}м, требуется находиться в пределах ${allowedRadius}м)`,
+            message: `Вы находитесь слишком далеко от площадки (${distanceFormatted}). Подойдите ближе 50 метров.`,
           });
         }
       } else {
-        console.log(`[LocksController.unlockByAppButton] Geolocation distance check bypassed for user: ${req.user.full_name} (${req.user.role}) - Remote testing mode active`);
+        console.log(`[LocksController.unlockByAppButton] Geolocation distance check bypassed for admin: ${req.user.full_name} (${req.user.role})`);
       }
 
       // Determine Gateway online status
@@ -322,25 +346,48 @@ export class LocksController {
 
       // If already authorized host/guest/approved request, unlock door physically!
       if (isHost || isApprovedGuest || isApprovedJoinRequest) {
-        // GPS Geolocation Check (Haversine Formula) - Bypassed for Admin / Anton Ivkin for remote testing
-        const isAdminOrAnton = req.user.role === 'admin' || req.user.full_name?.includes('Ивкин Антон') || req.user.iin === '890918350184';
+        const userRole = (req.user.role || '').toUpperCase();
+        const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
 
-        if (!isAdminOrAnton) {
-          const userLat = userLatitude !== undefined ? Number(userLatitude) : (user_latitude !== undefined ? Number(user_latitude) : ground.latitude);
-          const userLon = userLongitude !== undefined ? Number(userLongitude) : (user_longitude !== undefined ? Number(user_longitude) : ground.longitude);
+        if (!isAdmin) {
+          const rawLat = req.body.latitude ?? req.body.userLatitude ?? req.body.user_latitude ?? req.body.lat;
+          const rawLon = req.body.longitude ?? req.body.userLongitude ?? req.body.user_longitude ?? req.body.lng;
 
+          if (
+            rawLat === undefined ||
+            rawLat === null ||
+            rawLat === '' ||
+            isNaN(Number(rawLat)) ||
+            rawLon === undefined ||
+            rawLon === null ||
+            rawLon === '' ||
+            isNaN(Number(rawLon))
+          ) {
+            return res.status(400).json({
+              success: false,
+              doorUnlocked: false,
+              message: 'Требуется передача геопозиции для открытия замка',
+            });
+          }
+
+          const userLat = Number(rawLat);
+          const userLon = Number(rawLon);
           const distanceMeters = calculateDistanceMeters(userLat, userLon, ground.latitude, ground.longitude);
           const allowedRadius = ground.allowed_radius_meters || 50;
 
           if (distanceMeters > allowedRadius) {
-            return res.status(400).json({
+            const distanceFormatted = distanceMeters >= 1000
+              ? `${(distanceMeters / 1000).toFixed(1)} км`
+              : `${Math.round(distanceMeters)} м`;
+
+            return res.status(403).json({
               success: false,
               doorUnlocked: false,
-              message: `Вы находитесь слишком далеко от площадки (расстояние ${Math.round(distanceMeters)}м, требуется находиться в пределах ${allowedRadius}м)`,
+              message: `Вы находитесь слишком далеко от площадки (${distanceFormatted}). Подойдите ближе 50 метров.`,
             });
           }
         } else {
-          console.log(`[LocksController.unlockByDoorQr] Geolocation distance check bypassed for user: ${req.user.full_name} (${req.user.role}) - Remote testing mode active`);
+          console.log(`[LocksController.unlockByDoorQr] Geolocation distance check bypassed for admin: ${req.user.full_name} (${req.user.role})`);
         }
 
         const gateway = ground.gateways[0];

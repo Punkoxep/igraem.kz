@@ -232,20 +232,56 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
   const [participantsList, setParticipantsList] = useState(initialGuests);
 
   const handleOpenDoorClick = async () => {
-    setIsUnlocking(true);
-    try {
-      const res = await api.unlockDoor({ bookingId: currentBooking.id, qrCode: currentBooking.qrCode });
-      if (res && res.success === false) {
-        alert(res.message || 'Не удалось открыть дверь');
-      } else {
-        setActiveModal('doorOpened');
-      }
-    } catch (e: any) {
-      console.warn('[VenueOpenedScreen] Door unlock API call error:', e);
-      alert(e.message || 'Ошибка связи с замком');
-    } finally {
-      setIsUnlocking(false);
+    if (!('geolocation' in navigator)) {
+      alert('Геолокация не поддерживается вашим браузером. Включите геолокацию на смартфоне для открытия замка.');
+      return;
     }
+
+    setIsUnlocking(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await api.unlockDoor({
+            bookingId: currentBooking.id,
+            qrCode: currentBooking.qrCode,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+
+          if (res && res.success === false) {
+            alert(res.message || 'Не удалось открыть дверь');
+          } else {
+            setActiveModal('doorOpened');
+          }
+        } catch (e: any) {
+          console.warn('[VenueOpenedScreen] Door unlock API call error:', e);
+          alert(e.message || 'Ошибка связи с замком');
+        } finally {
+          setIsUnlocking(false);
+        }
+      },
+      async (err) => {
+        console.warn('[VenueOpenedScreen] Geolocation error:', err);
+        // Fallback for admins: attempt unlock without coordinates (if admin)
+        try {
+          const res = await api.unlockDoor({
+            bookingId: currentBooking.id,
+            qrCode: currentBooking.qrCode,
+          });
+
+          if (res && res.success) {
+            setActiveModal('doorOpened');
+            setIsUnlocking(false);
+            return;
+          }
+        } catch (e) {}
+
+        setIsUnlocking(false);
+        alert('Включите геолокацию на смартфоне для открытия замка.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleApproveParticipant = (id: string) => {

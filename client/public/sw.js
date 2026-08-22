@@ -8,37 +8,52 @@ self.addEventListener('activate', function(event) {
 });
 
 self.addEventListener('push', function(event) {
-  let payload = {};
+  let data = {};
   try {
-    payload = event.data ? event.data.json() : {};
+    data = event.data ? event.data.json() : {};
   } catch (e) {
-    payload = {
+    data = {
       title: 'IGRAEM.KZ ⚽',
-      body: event.data ? event.data.text() : 'Новый входящий запрос!'
+      body: event.data ? event.data.text() : 'Новое уведомление от IGRAEM.KZ'
     };
   }
 
+  const targetUrl = (data.data && data.data.url) || data.url || '/requests';
+
   const options = {
-    body: payload.body || 'Новый входящий запрос!',
-    icon: payload.icon || '/icons/icon-192x192.png',
-    badge: payload.badge || '/icons/badge-72x72.png',
-    vibrate: payload.vibrate || [300, 100, 300, 100, 300], // ощутимый вибро-шаблон
-    silent: false,
-    requireInteraction: true, // не гасить пока пользователь не увидит
-    data: payload.data || { url: payload.url || '/requests' },
+    body: data.body || 'Новое уведомление от IGRAEM.KZ',
+    icon: '/icons/icon-192x192.png', // Яркая цветная иконка приложения
+    badge: '/icons/badge-72x72.png', // Монохромный белый силуэт для статус-бара Android
+    vibrate: data.vibrate || [200, 100, 200],
+    tag: data.tag || 'igraem-general-notification', // Чтобы группировать или обновлять
+    renotify: true,
+    requireInteraction: true, // Уведомление НЕ исчезает само и висит в шторке/на экране блокировки, пока пользователь не смахнет или не нажмет
+    data: {
+      url: targetUrl,
+      dateOfArrival: Date.now()
+    },
     actions: [
-      { action: 'open', title: 'Открыть запрос' }
+      { action: 'open', title: 'Открыть' },
+      { action: 'close', title: 'Закрыть' }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Новый запрос на игру! ⚽', options)
+    self.registration.showNotification(data.title || 'Новый запрос на игру! ⚽', options)
   );
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/requests';
+
+  // Если нажато действие "Закрыть", не открываем окно
+  if (event.action === 'close') {
+    return;
+  }
+
+  const notificationData = event.notification.data || {};
+  const targetUrl = notificationData.url || '/requests';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (let i = 0; i < clientList.length; i++) {

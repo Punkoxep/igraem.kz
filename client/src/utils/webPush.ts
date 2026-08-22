@@ -82,3 +82,20 @@ export async function registerServiceWorkerAndSubscribe(
 
   return subscription;
 }
+
+/**
+ * Unsubscribes from browser PushManager if active
+ */
+export async function unsubscribePush(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      return await subscription.unsubscribe();
+    }
+  } catch (e) {
+    console.warn('[WebPush] Error unsubscribing:', e);
+  }
+  return false;
+}

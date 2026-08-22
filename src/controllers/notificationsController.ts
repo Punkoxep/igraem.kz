@@ -72,6 +72,52 @@ export class NotificationsController {
   }
 
   /**
+   * POST /api/v1/notifications/unsubscribe
+   * Remove push subscription and turn off notifications
+   */
+  public static async unsubscribe(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const endpoint = req.body?.endpoint;
+
+      // Delete specific endpoint or all user subscriptions
+      if (endpoint) {
+        await (prisma as any).pushSubscription.deleteMany({
+          where: { endpoint, user_id: req.user.id },
+        });
+      } else {
+        await (prisma as any).pushSubscription.deleteMany({
+          where: { user_id: req.user.id },
+        });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          push_subscription: null,
+          notify_30min: false,
+        },
+        select: {
+          id: true,
+          full_name: true,
+          notify_30min: true,
+          push_subscription: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Push-уведомления отключены',
+        data: updatedUser,
+      });
+    } catch (error: any) {
+      console.error('[NotificationsController.unsubscribe]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
    * POST /api/v1/notifications/toggle-reminders
    * Enable or disable 30-min reminders
    */

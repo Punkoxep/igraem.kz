@@ -365,6 +365,13 @@ class ApiService {
     });
   }
 
+  public async unsubscribePushNotifications(endpoint?: string): Promise<{ success: boolean; message?: string }> {
+    return this.request('/notifications/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    });
+  }
+
   public async sendTestPush(): Promise<{ success: boolean; message?: string; data?: any }> {
     return this.request('/notifications/test-push', {
       method: 'POST',

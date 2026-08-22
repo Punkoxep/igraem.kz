@@ -322,6 +322,77 @@ export class NotificationService {
   }
 
   /**
+   * Send Web Push notification to Organizer (Host) when a Participant leaves / cancels participation
+   */
+  public static async sendParticipantLeftPushToHost(
+    hostUserId: string,
+    participantName: string,
+    groundName: string,
+    startTime: string,
+    bookingId: string
+  ) {
+    try {
+      if (!hostUserId) return;
+
+      const hostUser = await prisma.user.findUnique({
+        where: { id: hostUserId },
+        include: {
+          pushSubscriptions: true,
+        },
+      });
+
+      if (!hostUser) return;
+
+      const title = 'Изменение в составе игроков ⚽';
+      const body = `${participantName} отказался от участия в брони на ${groundName} (${startTime}).`;
+      const icon = '/icons/icon-192x192.png';
+      const badge = '/icons/badge-72x72.png';
+      const vibrate = [200, 100, 200];
+      const payload = {
+        title,
+        body,
+        icon,
+        badge,
+        tag: `booking-member-left-${bookingId}`,
+        renotify: true,
+        requireInteraction: true,
+        vibrate,
+        silent: false,
+        data: {
+          url: `/requests?tab=incoming`,
+          bookingId,
+        },
+      };
+
+      const subscriptionsToSend: any[] = [];
+
+      if (hostUser.pushSubscriptions && hostUser.pushSubscriptions.length > 0) {
+        for (const sub of hostUser.pushSubscriptions) {
+          subscriptionsToSend.push({
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
+          });
+        }
+      } else if (hostUser.push_subscription) {
+        try {
+          subscriptionsToSend.push(JSON.parse(hostUser.push_subscription));
+        } catch (e) {}
+      }
+
+      if (subscriptionsToSend.length === 0) return;
+
+      for (const sub of subscriptionsToSend) {
+        await this.sendPush(sub, payload);
+      }
+    } catch (error: any) {
+      console.error('[NotificationService.sendParticipantLeftPushToHost] Error:', error.message);
+    }
+  }
+
+  /**
    * Send test push notification directly to authenticated user
    */
   public static async sendTestPush(userId: string) {

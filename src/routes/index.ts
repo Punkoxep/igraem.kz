@@ -68,6 +68,8 @@ router.post('/bookings/:id/extend', authenticateJwt, BookingsController.extendBo
 router.post('/bookings/:id/complete', authenticateJwt, BookingsController.completeBooking as any);
 router.post('/bookings/:id/finish', authenticateJwt, BookingsController.completeBooking as any);
 router.post('/bookings/:id/leave', authenticateJwt, BookingsController.leaveBooking as any);
+router.delete('/bookings/:id/leave', authenticateJwt, BookingsController.leaveBooking as any);
+router.delete('/bookings/:id/participants/me', authenticateJwt, BookingsController.leaveBooking as any);
 router.delete('/bookings/:bookingId/guests/:guestId', authenticateJwt, BookingsController.removeGuest as any);
 router.post('/bookings/:id/invite-link', authenticateJwt, BookingsController.getInviteLink as any);
 router.get('/invitations/:token', BookingsController.getInvitationByToken as any);

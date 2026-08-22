@@ -583,6 +583,27 @@ export const App: React.FC = () => {
     }
   };
 
+  // Leave/opt-out from joint booking (Participant) with real backend request
+  const handleLeaveBooking = async (bookingId: string) => {
+    try {
+      await api.leaveBooking(bookingId);
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      if (currentBookingSuccess?.id === bookingId) {
+        setCurrentBookingSuccess(null);
+      }
+      if (openedVenueBooking?.id === bookingId) {
+        setOpenedVenueBooking(null);
+      }
+      showToast('Вы отказались от участия в игре', 'info');
+      await fetchMyBookings();
+      await fetchMyRequests();
+      await fetchGrounds();
+    } catch (err: any) {
+      console.error('[App] leaveBooking error:', err);
+      showToast(err.message || 'Не удалось отказаться от участия', 'error');
+    }
+  };
+
   // Finish/Complete active booking (Host) or Leave session (Participant) with real backend request
   const handleFinishBooking = async (bookingId: string) => {
     const foundBooking = bookings.find((b) => b.id === bookingId) || openedVenueBooking;
@@ -856,6 +877,7 @@ export const App: React.FC = () => {
           }}
           onOpenVenue={handleOpenVenue}
           onCancelBooking={handleCancelBooking}
+          onLeaveBooking={handleLeaveBooking}
         />
       )}
 

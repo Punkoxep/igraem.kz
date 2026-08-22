@@ -21,6 +21,7 @@ interface BookingSuccessScreenProps {
   onGoToBookings: () => void;
   onOpenVenue: (booking: Booking) => void;
   onCancelBooking?: (bookingId: string) => void;
+  onLeaveBooking?: (bookingId: string) => void;
 }
 
 function getBookingCountdownInfo(booking: Booking, currentTimeMs: number = Date.now()) {
@@ -110,9 +111,11 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
   onGoToBookings,
   onOpenVenue,
   onCancelBooking,
+  onLeaveBooking,
 }) => {
   const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
   const [isConfirmCancelOpen, setIsConfirmCancelOpen] = useState(false);
+  const [isConfirmLeaveOpen, setIsConfirmLeaveOpen] = useState(false);
   const [problemText, setProblemText] = useState('');
   const [problemSent, setProblemSent] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -415,6 +418,18 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
             </button>
           )}
 
+          {/* Opt-out / Leave Game Button - Visible ONLY to joined participants */}
+          {booking.isParticipant && !booking.isHost && (
+            <button
+              type="button"
+              onClick={() => setIsConfirmLeaveOpen(true)}
+              className="w-full py-3 px-3 rounded-2xl bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-600 hover:text-rose-600 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
+            >
+              <X className="w-4 h-4 stroke-[2.5px] text-rose-500" />
+              <span>Отказаться от участия</span>
+            </button>
+          )}
+
           {/* Bottom Unlock Button */}
           <div className="pt-2">
             {canOpenNow ? (
@@ -544,6 +559,57 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
                   className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-2xl text-xs transition-all active:scale-98 cursor-pointer"
                 >
                   Оставить бронь
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Modal for Leaving / Opting out of Booking (Participants) */}
+        {isConfirmLeaveOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in text-slate-900"
+            onClick={() => setIsConfirmLeaveOpen(false)}
+          >
+            <div
+              className="w-full max-w-[380px] bg-white rounded-3xl p-6 shadow-2xl text-center space-y-4 animate-fade-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500">
+                <AlertCircle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-bold text-slate-900">
+                  Отказ от участия
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Вы уверены, что хотите отказаться от участия в игре на{' '}
+                  <span className="font-semibold text-slate-800">
+                    {booking.timeSlot}
+                  </span>
+                  ? Ваше место освободится для других участников.
+                </p>
+              </div>
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (onLeaveBooking) {
+                      await onLeaveBooking(booking.id);
+                    }
+                    setIsConfirmLeaveOpen(false);
+                    onClose();
+                  }}
+                  className="w-full bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold py-3.5 rounded-2xl text-xs transition-all shadow-md shadow-rose-500/20 active:scale-98 cursor-pointer"
+                >
+                  Да, отказаться
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmLeaveOpen(false)}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-2xl text-xs transition-all active:scale-98 cursor-pointer"
+                >
+                  Остаться в игре
                 </button>
               </div>
             </div>

@@ -442,86 +442,76 @@ export class BookingsController {
   }
 
   /**
-   * Participant leaves a shared booking session (status: 'left')
+   * Participant leaves/opts-out from a shared booking session
    * POST /api/v1/bookings/:id/leave
+   * DELETE /api/v1/bookings/:id/participants/me
    */
   public static async leaveBooking(req: AuthenticatedRequest, res: Response) {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { id } = req.params;
+      const bookingId = req.params.id || req.params.bookingId;
+      const user = req.user;
+
       const booking = await prisma.booking.findUnique({
-        where: { id },
-        include: { guests: true },
+        where: { id: bookingId },
+        include: {
+          ground: true,
+          host_user: true,
+        },
       });
 
       if (!booking) {
         return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
       }
 
-      // If user is host, delegate to completeBooking
-      if (booking.host_user_id === req.user.id || req.user.role === 'admin') {
-        const updated = await prisma.booking.update({
-          where: { id },
-          data: { status: 'completed' },
-        });
-
-        // Mark all guest participants as completed
-        await prisma.bookingGuest.updateMany({
-          where: { booking_id: id },
-          data: { status: 'completed' },
-        });
-
-        // Cancel any pending join requests
-        await prisma.joinRequest.updateMany({
-          where: {
-            booking_id: id,
-            status: { in: ['PENDING', 'pending'] },
-          },
-          data: { status: 'CANCELLED' },
-        });
-
-        return res.json({
-          success: true,
-          isHost: true,
-          message: 'Бронирование успешно завершено организатором, слот освобожден',
-          data: updated,
+      // If user is host, inform that host should cancel or complete booking instead
+      if (booking.host_user_id === user.id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Организатор не может покинуть свою бронь. Для этого отмените бронирование.',
         });
       }
 
-      // Guest / Participant leaving logic:
-      const guest = await prisma.bookingGuest.findUnique({
+      // 1. Remove/delete from bookingGuest
+      await prisma.bookingGuest.deleteMany({
         where: {
-          booking_id_user_id: {
-            booking_id: id,
-            user_id: req.user.id,
-          },
+          booking_id: bookingId,
+          user_id: user.id,
         },
       });
 
-      if (guest) {
-        await prisma.bookingGuest.update({
-          where: { id: guest.id },
-          data: { status: 'left' },
-        });
-      }
-
-      // Revoke any JoinRequest for this user
+      // 2. Mark any JoinRequest as CANCELLED
       await prisma.joinRequest.updateMany({
         where: {
-          booking_id: id,
+          booking_id: bookingId,
           OR: [
-            { user_iin: req.user.iin },
-            { user_phone: req.user.phone_number },
+            { user_iin: user.iin },
+            { user_phone: user.phone_number },
           ],
         },
-        data: { status: 'LEFT' },
+        data: {
+          status: 'CANCELLED',
+        },
       });
+
+      // 3. Send Web Push notification to Organizer (Host)
+      const participantName = user.full_name || 'Игрок';
+      const groundName = (booking.ground as any)?.name || 'площадке';
+      const startTime = booking.start_time;
+
+      NotificationService.sendParticipantLeftPushToHost(
+        booking.host_user_id,
+        participantName,
+        groundName,
+        startTime,
+        booking.id
+      ).catch((err) => console.warn('[BookingsController.leaveBooking] Push error:', err.message));
 
       return res.json({
         success: true,
         isParticipant: true,
-        message: 'Вы успешно вышли из совместной игры',
+        message: 'Вы успешно отказались от участия в игре. Ваше место освобождено.',
       });
     } catch (error: any) {
       console.error('[BookingsController.leaveBooking]', error);

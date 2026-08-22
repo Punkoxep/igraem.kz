@@ -36,6 +36,7 @@ model User {
   userBans       UserBan[]
   reviews        Review[]
   issues         IssueReport[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -227,6 +228,18 @@ model IssueReport {
   updated_at DateTime @updatedAt
 
   @@map("issue_reports")
+}
+
+model PushSubscription {
+  id         String   @id @default(uuid())
+  user_id    String   @map("user_id")
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  created_at DateTime @default(now()) @map("created_at")
+
+  @@map("push_subscriptions")
 }
 
 

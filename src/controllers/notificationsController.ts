@@ -50,14 +50,16 @@ export class NotificationsController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { subscription, notify30min = true, notify_30min } = req.body;
-      const targetNotify = notify_30min !== undefined ? notify_30min : notify30min;
+      const rawSub = req.body.subscription || req.body;
+      const targetNotify = req.body.notify_30min !== undefined ? req.body.notify_30min : (req.body.notify30min !== undefined ? req.body.notify30min : true);
 
-      if (!subscription) {
+      if (!rawSub || (!rawSub.endpoint && !req.body.endpoint)) {
         return res.status(400).json({ success: false, message: 'Отсутствует объект subscription' });
       }
 
-      const updatedUser = await NotificationService.saveSubscription(req.user.id, subscription, targetNotify);
+      const subscriptionObj = rawSub.endpoint ? rawSub : (req.body.endpoint ? req.body : rawSub);
+
+      const updatedUser = await NotificationService.saveSubscription(req.user.id, subscriptionObj, targetNotify);
 
       return res.json({
         success: true,

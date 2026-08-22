@@ -7,32 +7,24 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('push', (event) => {
-  let data = {
-    title: '⚽ Напоминание о бронировании | igraem.kz',
-    body: 'Ваша игра на площадке скоро начнется!',
-    icon: '/favicon.svg',
-    url: '/',
-  };
-
+self.addEventListener('push', function(event) {
+  let data = {};
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
-      data.body = event.data.text();
+      data = { body: event.data.text() };
     }
   }
 
-  const title = data.title || '⚽ Напоминание о бронировании | igraem.kz';
+  const title = data.title || 'IGRAEM.KZ ⚽';
   const options = {
-    body: data.body,
-    icon: data.icon || '/favicon.svg',
-    badge: '/favicon.svg',
-    vibrate: [200, 100, 200, 100, 200],
-    data: {
-      url: data.url || '/',
-      bookingId: data.bookingId,
-    },
+    body: data.body || 'Новое уведомление',
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: data.badge || '/icons/badge-72x72.png',
+    vibrate: data.vibrate || [200, 100, 200],
+    silent: false,
+    data: data.data || { url: data.url || '/requests' },
     actions: [
       { action: 'open', title: 'Открыть в приложении' }
     ]
@@ -41,10 +33,9 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-
-  const urlToOpen = event.notification.data?.url || '/';
+  const urlToOpen = (event.notification.data && event.notification.data.url) || '/requests';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
@@ -52,6 +43,9 @@ self.addEventListener('notificationclick', (event) => {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(urlToOpen);
+          }
           return client.focus();
         }
       }

@@ -13,8 +13,10 @@ const router = Router();
 
 // --- Notifications & Web Push Routes ---
 router.get('/notifications/vapid-key', NotificationsController.getVapidKey as any);
+router.get('/notifications/vapid-public-key', NotificationsController.getVapidKey as any);
 router.get('/notifications/status', authenticateJwt, NotificationsController.getStatus as any);
 router.post('/notifications/subscribe', authenticateJwt, NotificationsController.subscribe as any);
+router.post('/push/subscribe', authenticateJwt, NotificationsController.subscribe as any);
 router.post('/notifications/toggle-reminders', authenticateJwt, NotificationsController.toggleReminders as any);
 router.post('/notifications/test-push', authenticateJwt, NotificationsController.sendTestPush as any);
 

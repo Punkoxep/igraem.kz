@@ -17,7 +17,8 @@ import {
   Mail,
   ArrowRight,
   Plus,
-  Pencil
+  Pencil,
+  Bell
 } from 'lucide-react';
 import { CityName, Venue } from '../types';
 import { Language, LANGUAGE_NAMES, translations } from '../i18n/translations';
@@ -175,6 +176,25 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       showToast(err.message || 'Ошибка настройки уведомлений', 'error');
     } finally {
       setIsTogglingReminders(false);
+    }
+  };
+
+  const [isSendingTestPush, setIsSendingTestPush] = useState(false);
+
+  const handleSendTestPush = async () => {
+    if (isSendingTestPush) return;
+    setIsSendingTestPush(true);
+    try {
+      const res = await api.sendTestPush();
+      if (res && res.success) {
+        showToast('Тестовое Web Push уведомление отправлено! 🔔', 'success');
+      } else {
+        showToast(res.message || 'Не удалось отправить тестовое уведомление', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Ошибка отправки тестового уведомления', 'error');
+    } finally {
+      setIsSendingTestPush(false);
     }
   };
 
@@ -376,14 +396,19 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       </div>
 
       {/* BLOCK 3: Уведомления */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl pt-4 px-4 pb-1 shadow-xs space-y-1">
+      <div className="bg-white border border-slate-200/80 rounded-2xl pt-4 px-4 pb-3 shadow-xs space-y-2">
         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           {t.sectionNotifications}
         </div>
-        <div className="py-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-slate-800 pr-4">
-            {t.reminders30min}
-          </span>
+        <div className="py-1 flex items-center justify-between text-xs">
+          <div className="pr-4">
+            <span className="font-semibold text-slate-800 block">
+              Web Push уведомления
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium block pt-0.5">
+              Входящие запросы игроков и напоминания за 30 мин (звук + вибрация)
+            </span>
+          </div>
           <button
             type="button"
             disabled={isTogglingReminders}
@@ -399,6 +424,27 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             )}
           </button>
         </div>
+
+        {remindersEnabled && (
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[11px] text-slate-500 font-medium">
+              Проверка работы на устройстве:
+            </span>
+            <button
+              type="button"
+              disabled={isSendingTestPush}
+              onClick={handleSendTestPush}
+              className="text-xs font-bold text-[#00B050] hover:text-[#009040] bg-emerald-50 hover:bg-emerald-100/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+            >
+              {isSendingTestPush ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Bell className="w-3 h-3" />
+              )}
+              <span>Тест Push</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* BLOCK 4: Приложение */}

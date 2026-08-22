@@ -28,6 +28,45 @@ export class NotificationService {
   public static async saveSubscription(userId: string, subscription: any, notify30min: boolean = true) {
     const subscriptionStr = typeof subscription === 'string' ? subscription : JSON.stringify(subscription);
 
+    let endpoint = '';
+    let p256dh = '';
+    let auth = '';
+
+    if (typeof subscription === 'string') {
+      try {
+        const parsed = JSON.parse(subscription);
+        endpoint = parsed.endpoint || '';
+        p256dh = parsed.keys?.p256dh || parsed.p256dh || '';
+        auth = parsed.keys?.auth || parsed.auth || '';
+      } catch (e) {}
+    } else if (subscription && typeof subscription === 'object') {
+      endpoint = subscription.endpoint || '';
+      p256dh = subscription.keys?.p256dh || subscription.p256dh || '';
+      auth = subscription.keys?.auth || subscription.auth || '';
+    }
+
+    // Save/upsert to PushSubscription table
+    if (endpoint && p256dh && auth) {
+      try {
+        await (prisma as any).pushSubscription.upsert({
+          where: { endpoint },
+          create: {
+            user_id: userId,
+            endpoint,
+            p256dh,
+            auth,
+          },
+          update: {
+            user_id: userId,
+            p256dh,
+            auth,
+          },
+        });
+      } catch (e: any) {
+        console.warn('[NotificationService.saveSubscription] Error upserting to push_subscriptions table:', e.message);
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -67,7 +106,20 @@ export class NotificationService {
   /**
    * Send a Web Push notification to a target subscription
    */
-  public static async sendPush(subscriptionRaw: string | object, payload: { title: string; body: string; icon?: string; url?: string; [key: string]: any }) {
+  public static async sendPush(
+    subscriptionRaw: string | object,
+    payload: {
+      title: string;
+      body: string;
+      icon?: string;
+      badge?: string;
+      vibrate?: number[];
+      silent?: boolean;
+      data?: { url?: string; [key: string]: any };
+      url?: string;
+      [key: string]: any;
+    }
+  ) {
     try {
       const subscription = typeof subscriptionRaw === 'string' ? JSON.parse(subscriptionRaw) : subscriptionRaw;
       if (!subscription || !subscription.endpoint) {
@@ -75,10 +127,13 @@ export class NotificationService {
       }
 
       const stringifiedPayload = JSON.stringify({
-        icon: '/favicon.svg',
-        url: 'https://igraem.kz',
+        icon: payload.icon || '/icons/icon-192x192.png',
+        badge: payload.badge || '/icons/badge-72x72.png',
+        vibrate: payload.vibrate || [200, 100, 200],
+        silent: payload.silent !== undefined ? payload.silent : false,
+        data: payload.data || { url: payload.url || '/requests' },
         ...payload,
-        title: payload.title || '⚽ Напоминание о бронировании | igraem.kz',
+        title: payload.title || '⚽ Новое уведомление | igraem.kz',
         body: payload.body || '',
       });
 
@@ -91,30 +146,117 @@ export class NotificationService {
   }
 
   /**
+   * Send Web Push notification to Organizer (Host) when someone requests to join their booking
+   */
+  public static async sendJoinRequestPushToHost(
+    hostUserId: string,
+    requesterName: string,
+    groundName: string,
+    bookingId?: string
+  ) {
+    try {
+      if (!hostUserId) return;
+
+      const hostUser = await prisma.user.findUnique({
+        where: { id: hostUserId },
+        include: {
+          pushSubscriptions: true,
+        },
+      });
+
+      if (!hostUser) return;
+
+      const title = 'Новый запрос на игру! ⚽';
+      const body = `${requesterName} просит присоединиться к вашей брони на ${groundName}`;
+      const icon = '/icons/icon-192x192.png';
+      const badge = '/icons/badge-72x72.png';
+      const vibrate = [200, 100, 200];
+      const payload = {
+        title,
+        body,
+        icon,
+        badge,
+        vibrate,
+        silent: false,
+        data: { url: '/requests', bookingId },
+      };
+
+      const subscriptionsToSend: any[] = [];
+
+      if (hostUser.pushSubscriptions && hostUser.pushSubscriptions.length > 0) {
+        for (const sub of hostUser.pushSubscriptions) {
+          subscriptionsToSend.push({
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
+          });
+        }
+      } else if (hostUser.push_subscription) {
+        try {
+          subscriptionsToSend.push(JSON.parse(hostUser.push_subscription));
+        } catch (e) {}
+      }
+
+      if (subscriptionsToSend.length === 0) {
+        console.log(`[NotificationService] Host ${hostUser.full_name} (${hostUserId}) has no push subscriptions registered.`);
+        return;
+      }
+
+      for (const sub of subscriptionsToSend) {
+        await this.sendPush(sub, payload);
+      }
+
+      console.log(`[NotificationService] Sent JoinRequest push to host ${hostUser.full_name} (${hostUserId})`);
+    } catch (error: any) {
+      console.error('[NotificationService.sendJoinRequestPushToHost] Error:', error.message);
+    }
+  }
+
+  /**
    * Send test push notification directly to authenticated user
    */
   public static async sendTestPush(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, full_name: true, notify_30min: true, push_subscription: true },
+      include: { pushSubscriptions: true },
     });
 
     if (!user) {
       throw new Error('Пользователь не найден');
     }
 
-    if (!user.push_subscription) {
+    const hasSub = (user.pushSubscriptions && user.pushSubscriptions.length > 0) || !!user.push_subscription;
+    if (!hasSub) {
       throw new Error('Браузерная подписка на уведомления не найдена. Пожалуйста, включите тумблер напоминаний в профиле.');
     }
 
     const payload = {
-      title: '⚽ Напоминание о бронировании | igraem.kz',
-      body: 'Тестовое уведомление: напоминания о бронях за 30 минут успешно настроены и работают!',
-      icon: '/favicon.svg',
-      url: 'https://igraem.kz',
+      title: '⚽ Тестовое уведомление | igraem.kz',
+      body: 'Web Push уведомления успешно настроены и работают на вашем устройстве!',
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/badge-72x72.png',
+      vibrate: [200, 100, 200],
+      data: { url: '/requests' },
     };
 
-    const pushResult = await this.sendPush(user.push_subscription, payload);
+    let pushResult: any = { success: false };
+
+    if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
+      for (const sub of user.pushSubscriptions) {
+        pushResult = await this.sendPush(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
+          payload
+        );
+      }
+    } else if (user.push_subscription) {
+      pushResult = await this.sendPush(user.push_subscription, payload);
+    }
+
     return pushResult;
   }
 

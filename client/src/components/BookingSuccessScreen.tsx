@@ -6,11 +6,14 @@ import {
   AlertCircle,
   X,
   Send,
-  Unlock
+  Unlock,
+  Bell,
+  Loader2
 } from 'lucide-react';
 import { Booking } from '../types';
 import { formatDateDDMMYYYY } from '../utils/date';
 import { api } from '../services/api';
+import { registerServiceWorkerAndSubscribe, isPushSupported } from '../utils/webPush';
 
 interface BookingSuccessScreenProps {
   booking: Booking;
@@ -203,6 +206,48 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
 
   const [issueToast, setIssueToast] = useState<string | null>(null);
   const [isSendingProblem, setIsSendingProblem] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !isPushSupported()) return false;
+    return 'Notification' in window && Notification.permission === 'default';
+  });
+  const [isSubscribingPush, setIsSubscribingPush] = useState(false);
+
+  const handleEnableNotifications = async () => {
+    setIsSubscribingPush(true);
+    try {
+      if (!isPushSupported()) {
+        throw new Error('Ваш браузер не поддерживает Web Push уведомления');
+      }
+
+      // 1. Get VAPID public key
+      const res = await api.getVapidPublicKey();
+      const publicKey = res.publicKey;
+      if (!publicKey) {
+        throw new Error('Не удалось получить ключ VAPID от сервера');
+      }
+
+      // 2. Register Service Worker & subscribe
+      const subscription = await registerServiceWorkerAndSubscribe(publicKey);
+      if (!subscription) {
+        throw new Error('Не удалось оформить подписку Web Push');
+      }
+
+      // 3. Send subscription to backend
+      await api.subscribePushNotifications({
+        subscription,
+        notify30min: true,
+      });
+
+      setShowNotificationPrompt(false);
+      setIssueToast('Уведомления успешно подключены! 🔔');
+      setTimeout(() => setIssueToast(null), 4000);
+    } catch (err: any) {
+      console.warn('[BookingSuccessScreen] handleEnableNotifications error:', err);
+      alert(err.message || 'Не удалось включить уведомления');
+    } finally {
+      setIsSubscribingPush(false);
+    }
+  };
 
   const handleSendProblem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,6 +340,48 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Web Push Notification Prompt Banner */}
+          {showNotificationPrompt && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-2xl p-3.5 text-left space-y-2.5 shadow-xs animate-fade-in">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-[#00B050] flex items-center justify-center shrink-0 mt-0.5">
+                  <Bell className="w-4 h-4 stroke-[2.2px]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-bold text-slate-900 text-xs block leading-tight">
+                    Включите Web Push уведомления
+                  </span>
+                  <p className="text-[11px] text-slate-600 font-medium leading-relaxed pt-0.5">
+                    Разрешите уведомления, чтобы мгновенно получать запросы от игроков со звуком и вибрацией
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  disabled={isSubscribingPush}
+                  className="flex-1 py-2 px-3 rounded-xl bg-[#00B050] hover:bg-[#009644] text-white text-xs font-bold transition-all active:scale-98 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubscribingPush ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Bell className="w-3.5 h-3.5" />
+                  )}
+                  <span>Разрешить</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationPrompt(false)}
+                  className="py-2 px-3 rounded-xl bg-white/80 hover:bg-white text-slate-500 text-xs font-semibold border border-slate-200/60 transition-all cursor-pointer"
+                >
+                  Позже
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions (Календарь & Поделиться) */}
           <div className="grid grid-cols-2 gap-2.5 pt-1">

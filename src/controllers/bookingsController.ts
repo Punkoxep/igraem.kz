@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
 import { getLocalNow } from '../utils/dateUtils';
+import { NotificationService } from '../services/notificationService';
 
 export class BookingsController {
   /**
@@ -1297,7 +1298,7 @@ export class BookingsController {
 
       const booking = await prisma.booking.findUnique({
         where: { id: targetBookingId },
-        include: { guests: true, joinRequests: true },
+        include: { ground: true, guests: true, joinRequests: true },
       });
 
       if (!booking) {
@@ -1470,6 +1471,15 @@ export class BookingsController {
           autoApproved: true,
         });
       }
+
+      // Send Web Push notification to Organizer (Host)
+      const groundName = (booking.ground as any)?.name || 'площадке';
+      NotificationService.sendJoinRequestPushToHost(
+        booking.host_user_id,
+        applicantName,
+        groundName,
+        booking.id
+      ).catch((err) => console.warn('[BookingsController.requestJoinSlot] Push notification error:', err));
 
       return res.status(201).json({
         success: true,

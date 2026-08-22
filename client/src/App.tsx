@@ -343,62 +343,33 @@ export const App: React.FC = () => {
   }, [incomingVenueRequests]);
 
   const handleAcceptIncomingRequest = async (venueReqId: string, reqId: string) => {
-    try {
-      const res = await api.approveJoinRequest(reqId);
-      if (res && res.success === false) {
-        showToast(res.message || 'Заявка более не актуальна', 'error');
-        // Remove outdated request immediately from state
-        setIncomingVenueRequests((prev) =>
-          prev
-            .map((v) =>
-              v.id === venueReqId
-                ? {
-                    ...v,
-                    requests: v.requests.filter((r) => r.id !== reqId),
-                    pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
-                  }
-                : v
-            )
-            .filter((v) => v.requests.length > 0)
-        );
-        await fetchHostRequests();
-        await fetchMyBookings();
-        await fetchGrounds();
-        return;
-      }
-
-      showToast('Заявка принята! Игрок добавлен к игре.', 'success');
-      setIncomingVenueRequests((prev) =>
-        prev.map((v) =>
+    // 1. Immediately remove request from local state
+    setIncomingVenueRequests((prev) =>
+      prev
+        .map((v) =>
           v.id === venueReqId
             ? {
                 ...v,
                 joinedCount: (v.joinedCount || 1) + 1,
-                requests: v.requests.map((r) => (r.id === reqId ? { ...r, status: 'accepted' } : r)),
+                requests: v.requests.filter((r) => r.id !== reqId),
+                pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
               }
             : v
         )
-      );
-      await fetchHostRequests();
-      await fetchMyBookings();
-      await fetchGrounds();
+        .filter((v) => v.requests.length > 0)
+    );
+
+    try {
+      const res = await api.approveJoinRequest(reqId);
+      if (res && res.success === false) {
+        showToast(res.message || 'Заявка более не актуальна', 'error');
+      } else {
+        showToast('Заявка принята! Игрок добавлен к игре.', 'success');
+      }
     } catch (err: any) {
       console.warn('[App] Approve join request API error:', err);
       showToast(err.message || 'Заявка более не актуальна', 'error');
-      // On error (e.g. 404/409 cancelled or not found), remove card immediately
-      setIncomingVenueRequests((prev) =>
-        prev
-          .map((v) =>
-            v.id === venueReqId
-              ? {
-                  ...v,
-                  requests: v.requests.filter((r) => r.id !== reqId),
-                  pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
-                }
-              : v
-          )
-          .filter((v) => v.requests.length > 0)
-      );
+    } finally {
       await fetchHostRequests();
       await fetchMyBookings();
       await fetchGrounds();
@@ -406,55 +377,32 @@ export const App: React.FC = () => {
   };
 
   const handleDeclineIncomingRequest = async (venueReqId: string, reqId: string) => {
+    // 1. Immediately remove request from local state
+    setIncomingVenueRequests((prev) =>
+      prev
+        .map((v) =>
+          v.id === venueReqId
+            ? {
+                ...v,
+                requests: v.requests.filter((r) => r.id !== reqId),
+                pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
+              }
+            : v
+        )
+        .filter((v) => v.requests.length > 0)
+    );
+
     try {
       const res = await api.rejectJoinRequest(reqId);
       if (res && res.success === false) {
         showToast(res.message || 'Заявка более не актуальна', 'error');
-        setIncomingVenueRequests((prev) =>
-          prev
-            .map((v) =>
-              v.id === venueReqId
-                ? {
-                    ...v,
-                    requests: v.requests.filter((r) => r.id !== reqId),
-                    pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
-                  }
-                : v
-            )
-            .filter((v) => v.requests.length > 0)
-        );
-        await fetchHostRequests();
-        return;
+      } else {
+        showToast('Заявка отклонена', 'info');
       }
-
-      showToast('Заявка отклонена', 'info');
-      setIncomingVenueRequests((prev) =>
-        prev.map((v) =>
-          v.id === venueReqId
-            ? {
-                ...v,
-                requests: v.requests.map((r) => (r.id === reqId ? { ...r, status: 'declined' } : r)),
-              }
-            : v
-        )
-      );
-      await fetchHostRequests();
     } catch (err: any) {
       console.warn('[App] Reject join request API error:', err);
       showToast(err.message || 'Заявка более не актуальна', 'error');
-      setIncomingVenueRequests((prev) =>
-        prev
-          .map((v) =>
-            v.id === venueReqId
-              ? {
-                  ...v,
-                  requests: v.requests.filter((r) => r.id !== reqId),
-                  pendingRequestsCount: Math.max(0, (v.pendingRequestsCount || 1) - 1),
-                }
-              : v
-          )
-          .filter((v) => v.requests.length > 0)
-      );
+    } finally {
       await fetchHostRequests();
     }
   };

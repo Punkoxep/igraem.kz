@@ -35,12 +35,43 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'my' | 'incoming'>(getInitialSubTab);
   const [selectedVenueForRequests, setSelectedVenueForRequests] = useState<VenueIncomingRequests | null>(null);
   const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(new Set());
+  const [dismissedRequestIds, setDismissedRequestIds] = useState<Set<string>>(new Set());
 
   const handleSubTabClick = (tab: 'my' | 'incoming') => {
     setActiveSubTab(tab);
     if (typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/requests')) {
       const targetUrl = tab === 'incoming' ? '/requests?tab=incoming' : '/requests';
       window.history.replaceState({ tab: 'requests', subTab: tab }, '', targetUrl);
+    }
+  };
+
+  const handleAccept = async (venueId: string, reqId: string) => {
+    if (processingRequestIds.has(reqId)) return;
+    setProcessingRequestIds((prev) => new Set(prev).add(reqId));
+    setDismissedRequestIds((prev) => new Set(prev).add(reqId));
+    try {
+      await onAcceptIncomingRequest(venueId, reqId);
+    } finally {
+      setProcessingRequestIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reqId);
+        return next;
+      });
+    }
+  };
+
+  const handleDecline = async (venueId: string, reqId: string) => {
+    if (processingRequestIds.has(reqId)) return;
+    setProcessingRequestIds((prev) => new Set(prev).add(reqId));
+    setDismissedRequestIds((prev) => new Set(prev).add(reqId));
+    try {
+      await onDeclineIncomingRequest(venueId, reqId);
+    } finally {
+      setProcessingRequestIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reqId);
+        return next;
+      });
     }
   };
 
@@ -61,26 +92,39 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
   const t = translations[currentLang];
 
-  // Only show venues that have at least 1 request sent to them, with pending requests at the very top
+  // Only show venues that have at least 1 pending request sent to them, with highest count at top
   const filteredIncomingVenueRequests = React.useMemo(() => {
-    const list = incomingVenueRequests.filter((v) => v.requests && v.requests.length > 0);
-    return [...list].sort((a, b) => {
-      const aPending = (a.requests || []).filter((r) => r.status === 'pending').length;
-      const bPending = (b.requests || []).filter((r) => r.status === 'pending').length;
-      if (bPending !== aPending) {
-        return bPending - aPending;
-      }
-      return 0;
-    });
-  }, [incomingVenueRequests]);
+    const list = incomingVenueRequests
+      .map((v) => ({
+        ...v,
+        requests: (v.requests || []).filter((r) => !dismissedRequestIds.has(r.id) && r.status === 'pending'),
+      }))
+      .filter((v) => v.requests.length > 0);
+
+    return [...list].sort((a, b) => b.requests.length - a.requests.length);
+  }, [incomingVenueRequests, dismissedRequestIds]);
 
   // Helper for sport icon emoji
   const getSportEmoji = (sport: string) => (sport === 'basketball' ? '🏀' : '⚽');
 
   // Render detail view for specific venue's incoming requests (Screen 3)
   if (selectedVenueForRequests) {
-    const currentVenueData =
-      incomingVenueRequests.find((v) => v.id === selectedVenueForRequests.id) || selectedVenueForRequests;
+    const foundVenue = incomingVenueRequests.find((v) => v.id === selectedVenueForRequests.id);
+    const currentVenueData = foundVenue
+      ? {
+          ...foundVenue,
+          requests: (foundVenue.requests || []).filter(
+            (r) => !dismissedRequestIds.has(r.id) && r.status === 'pending'
+          ),
+        }
+      : {
+          ...selectedVenueForRequests,
+          requests: (selectedVenueForRequests.requests || []).filter(
+            (r) => !dismissedRequestIds.has(r.id) && r.status === 'pending'
+          ),
+        };
+
+    const activeRequests = currentVenueData.requests;
 
     return (
       <div className="flex-1 flex flex-col min-h-0 bg-slate-50 text-slate-900 w-full animate-fade-in">
@@ -89,7 +133,7 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
           <button
             type="button"
             onClick={() => setSelectedVenueForRequests(null)}
-            className="flex items-center gap-1 bg-[#E8F8F0] text-[#00B050] px-3.5 py-1.5 rounded-full font-bold text-xs border border-[#00B050]/20 hover:bg-[#d5f5e3] active:scale-95 transition-all"
+            className="flex items-center gap-1 bg-[#E8F8F0] text-[#00B050] px-3.5 py-1.5 rounded-full font-bold text-xs border border-[#00B050]/20 hover:bg-[#d5f5e3] active:scale-95 transition-all cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
             <span>Назад</span>
@@ -114,18 +158,18 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
           {/* List of Incoming User Requests for this venue */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden w-full">
-            {currentVenueData.requests.length === 0 ? (
+            {activeRequests.length === 0 ? (
               <div className="p-8 text-center text-slate-500 text-xs font-medium space-y-2">
                 <div className="w-12 h-12 mx-auto rounded-full bg-[#E8F8F0] text-[#00B050] flex items-center justify-center">
                   <Check className="w-6 h-6 stroke-[2.5]" />
                 </div>
-                <p className="font-bold text-slate-800 text-sm">Все входящие запросы обработаны</p>
+                <p className="font-bold text-slate-800 text-sm">Вам пока не присылали запросов</p>
                 <p className="text-slate-400 text-xs">
-                  Новые заявки от желающих присоединиться игроков отобразятся здесь.
+                  Все входящие заявки по данной брони обработаны.
                 </p>
               </div>
             ) : (
-              currentVenueData.requests.map((req) => (
+              activeRequests.map((req) => (
                 <div key={req.id} className="p-4 flex flex-col gap-2.5 w-full">
                   {/* User Name and Phone on top row */}
                   <div className="w-full">
@@ -141,64 +185,22 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
                   {/* Actions / Status on bottom row */}
                   <div className="flex items-center justify-end gap-3 w-full">
-                    {req.status === 'pending' && (
-                      <>
-                        <button
-                          type="button"
-                          disabled={processingRequestIds.has(req.id)}
-                          onClick={async () => {
-                            if (processingRequestIds.has(req.id)) return;
-                            setProcessingRequestIds((prev) => new Set(prev).add(req.id));
-                            try {
-                              await onDeclineIncomingRequest(currentVenueData.id, req.id);
-                            } finally {
-                              setProcessingRequestIds((prev) => {
-                                const next = new Set(prev);
-                                next.delete(req.id);
-                                return next;
-                              });
-                            }
-                          }}
-                          className="text-red-500 hover:text-red-600 font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                          {processingRequestIds.has(req.id) ? '...' : 'Отклонить'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={processingRequestIds.has(req.id)}
-                          onClick={async () => {
-                            if (processingRequestIds.has(req.id)) return;
-                            setProcessingRequestIds((prev) => new Set(prev).add(req.id));
-                            try {
-                              await onAcceptIncomingRequest(currentVenueData.id, req.id);
-                            } finally {
-                              setProcessingRequestIds((prev) => {
-                                const next = new Set(prev);
-                                next.delete(req.id);
-                                return next;
-                              });
-                            }
-                          }}
-                          className="text-[#00B050] hover:text-[#009040] font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                          {processingRequestIds.has(req.id) ? '...' : 'Принять'}
-                        </button>
-                      </>
-                    )}
-
-                    {req.status === 'accepted' && (
-                      <span className="text-[#00B050] font-bold text-xs flex items-center gap-1 bg-[#E8F8F0] px-2.5 py-1 rounded-full border border-[#00B050]/20">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Принят</span>
-                      </span>
-                    )}
-
-                    {req.status === 'declined' && (
-                      <span className="text-slate-400 font-semibold text-xs flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Отклонён</span>
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      disabled={processingRequestIds.has(req.id)}
+                      onClick={() => handleDecline(currentVenueData.id, req.id)}
+                      className="text-red-500 hover:text-red-600 font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {processingRequestIds.has(req.id) ? '...' : 'Отклонить'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={processingRequestIds.has(req.id)}
+                      onClick={() => handleAccept(currentVenueData.id, req.id)}
+                      className="text-[#00B050] hover:text-[#009040] font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {processingRequestIds.has(req.id) ? '...' : 'Принять'}
+                    </button>
                   </div>
                 </div>
               ))

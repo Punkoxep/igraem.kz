@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+client/node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+client/dist/
+client/build/
+.output/
+
+# Local Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# SQLite local database & Prisma temp files
+*.db
+*.db-journal
+dev.db
+postgres_data/
+
+# Logs & temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Binaries & Test Scripts
+ngrok.exe
+ngrok.zip
+test_*.js
+test_*.ps1

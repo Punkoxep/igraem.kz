@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sports_ground_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: sharing_ploshadka_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sharing_ploshadka_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sports_ground_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      TZ: "Asia/Almaty"
+      DATABASE_URL: "postgresql://postgres:postgrespassword@db:5432/sharing_ploshadka_db?schema=public"
+      JWT_SECRET: "super-secret-jwt-key-sharing-ploshadka-2026"
+      JWT_EXPIRES_IN: "7d"
+      TTLOCK_MOCK: "${TTLOCK_MOCK:-false}"
+      TTLOCK_LOCK_ID: "${TTLOCK_LOCK_ID:-34275770}"
+      TTLOCK_MAC_ADDRESS: "${TTLOCK_MAC_ADDRESS:-BA:38:37:0F:0D:0A}"
+      TTLOCK_CLIENT_ID: "${TTLOCK_CLIENT_ID:-4ff25d12b645422e96321c854c9f56a2}"
+      TTLOCK_CLIENT_SECRET: "${TTLOCK_CLIENT_SECRET:-c84465e4a4b15d8cc39fb83eb5a51f88}"
+      TTLOCK_USERNAME: "${TTLOCK_USERNAME:-punkoxep@gmail.com}"
+      TTLOCK_PASSWORD: "${TTLOCK_PASSWORD:-Punkoxep169254131!}"
+      TTLOCK_API_URL: "${TTLOCK_API_URL:-https://api.ttlock.com}"
+      CRON_GATEWAY_MONITOR: "*/3 * * * *"
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      EMAIL_FROM: "${EMAIL_FROM}"
+      FRONTEND_URL: "${FRONTEND_URL}"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local

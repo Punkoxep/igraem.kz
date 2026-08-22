@@ -1,0 +1,3110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шэринг Спортивных Площадок | TTLock & IIN System Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: rgba(22, 28, 45, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.35);
+      --accent-blue: #3b82f6;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 10% 20%, #111827 0%, #070a10 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 22px;
+      color: #fff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ffffff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .system-badge {
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 30px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .user-pill:hover, .user-pill.active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .user-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: #000;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #d1d5db;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--accent-primary), #059669);
+      color: #000;
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .ground-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+
+    .ground-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .ground-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .ground-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f3f4f6;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .tag-football { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .tag-volleyball { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .tag-basketball { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+    .qr-badge {
+      display: inline-block;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px 8px;
+      border-radius: 6px;
+      margin-top: 8px;
+      color: #a7f3d0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .status-online { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-offline { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot-online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+    .dot-offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+    .log-box {
+      background: #070a10;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #34d399;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+    .alert-error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+    .alert-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .metric-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .metric-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .heatmap-cell {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .heatmap-cell.level-peak {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.5);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+    }
+
+    .heatmap-cell.level-normal {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .heatmap-cell.level-low {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚽</div>
+      <div>
+        <div class="brand-title">Шэринг Спортивных Площадок</div>
+        <div style="font-size: 12px; color: var(--text-muted);">TTLock Cloud + IIN Validator + 15-Person Slot Engine</div>
+      </div>
+    </div>
+    <div class="system-badge">● API Online (Port 3000)</div>
+  </header>
+
+  <div class="container">
+    <!-- Sidebar / Auth Switcher -->
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>👤 Активный аккаунт</span>
+          <button class="btn" style="width: auto; padding: 4px 8px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="toggleRegisterModal(true)">+ Игрок</button>
+        </div>
+        <div id="usersList">
+          <!-- Dynamically populated -->
+        </div>
+        <button class="btn btn-secondary" style="margin-top: 12px; font-size: 12px; width: 100%; font-weight: bold;" onclick="toggleRegisterModal(true)">
+          ➕ Зарегистрировать нового игрока
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span>📡 TTLock Direct Wi-Fi (Замок 34275770)</span>
+          <button class="btn" style="width: auto; padding: 3px 8px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="loadGateways(true)" title="Обновить статус замка">🔄</button>
+        </div>
+        <div id="gatewaysList">
+          <div style="font-size: 12px; color: var(--text-muted);">Загрузка статуса замка...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div>
+      <div id="alertBox" class="alert"></div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-grounds')">🏟️ Площадки & QR Двери</button>
+        <button class="tab-btn" onclick="switchTab('tab-iin')">🪪 Валидатор ИИН РК</button>
+        <button class="tab-btn" onclick="switchTab('tab-bookings')">📅 Бронирования & 15 Слотов</button>
+        <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ Админ-Мониторинг</button>
+        <button class="tab-btn" onclick="switchTab('tab-akimat')">🏛️ Дашборд Акимата</button>
+        <button class="tab-btn" onclick="switchTab('tab-issues')">⚠️ Жалобы & Проблемы <span id="issuesCountBadge" style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;margin-left:4px;display:none;">0</span></button>
+      </div>
+
+      <!-- TAB 1: GROUNDS & HYBRID ENTRY -->
+      <div id="tab-grounds" class="tab-content active">
+        <div class="card">
+          <div class="card-title">🏟️ Спортивные площадки (Школа №11)</div>
+          <div id="groundsGrid" class="grid-2">
+            <!-- Dynamically populated grounds -->
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">🚪 Симулятор гибридного входа (Разблокировка TTLock)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Протестируйте открывание двери кнопкой из приложения (1-Click) или сканированием статичного QR-кода на двери.
+          </p>
+
+          <div id="activeAccessBanner" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
+            <div>⚪ Проверка активного доступа...</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label>📍 Симуляция GPS-геолокации смартфона игрока:</label>
+            <select id="gpsSimulationSelect" style="border-color: rgba(52, 211, 153, 0.4);">
+              <option value="in_radius">🟢 На площадке (В пределах 50м радиуса)</option>
+              <option value="far_away">🔴 Вне площадки (500м от площадки)</option>
+            </select>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label>Способ А: Кнопка "Открыть дверь" в приложении (1-Click)</label>
+              <input type="text" id="appUnlockBookingId" placeholder="Оставьте пустым для 1-Click автоопределения">
+              <button class="btn" style="margin-top: 10px;" onclick="unlockAppButton()">🔓 Открыть дверным замком (Кнопка)</button>
+            </div>
+
+            <div>
+              <label>Способ Б: Сканирование статичного QR на двери</label>
+              <select id="qrUnlockTokenSelect">
+                <option value="QR_SCHOOL11_FOOTBALL">QR_SCHOOL11_FOOTBALL (Школа №11 - Футбол)</option>
+                <option value="QR_SCHOOL11_BASKETBALL">QR_SCHOOL11_BASKETBALL (Школа №11 - Баскетбол)</option>
+              </select>
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="unlockQrCode()">📷 Отсканировать QR на двери</button>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <label>Результат ответа замка / TTLock Cloud / Offline PIN:</label>
+            <div id="lockResponseLog" class="log-box">Нажмите «Открыть» для тестирования...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: IIN VALIDATOR -->
+      <div id="tab-iin" class="tab-content">
+        <div class="card">
+          <div class="card-title">🪪 Строгий Валидатор ИИН РК (Двухпроходный Modulo 11)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Введите ИИН РК (12 цифр). Система автоматически определит век рождения, дату рождения и пол, а также проверит контрольный разряд по математическому алгоритму РК.
+          </p>
+          <div class="form-group">
+            <label>ИИН Пользователя (12 цифр)</label>
+            <input type="text" id="testIinInput" placeholder="Например: 950515350124" value="950515350124" oninput="liveValidateIIN()">
+          </div>
+
+          <div id="iinCalcResult" class="log-box" style="margin-bottom: 20px;">
+            Введите 12 цифр для проверки...
+          </div>
+
+          <h3 style="font-size: 15px; margin-bottom: 12px; color: #fff;">Быстрая регистрация по проверенному ИИН</h3>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>ФИО</label>
+              <input type="text" id="regFullName" placeholder="Иван Иванов" value="Кайрат Нурланов">
+            </div>
+            <div class="form-group">
+              <label>Телефон РК</label>
+              <input type="text" id="regPhone" placeholder="+77070001122" value="+77079998877">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="regPassword" value="password123">
+          </div>
+          <button class="btn" onclick="submitRegistration()">Зарегистрировать с автозаполнением Пола/Даты рождения</button>
+        </div>
+      </div>
+
+      <!-- TAB 3: BOOKINGS & 15-SLOT MANAGEMENT -->
+      <div id="tab-bookings" class="tab-content">
+        <div class="card">
+          <div class="card-title">📅 Создать бронирование сеанса</div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Спортивная площадка</label>
+              <select id="bookGroundSelect"></select>
+            </div>
+            <div class="form-group">
+              <label>Дата (YYYY-MM-DD)</label>
+              <input type="date" id="bookDate">
+            </div>
+            <div class="form-group">
+              <label>Время начала (HH:mm)</label>
+              <input type="text" id="bookStartTime" value="18:00">
+            </div>
+            <div class="form-group">
+              <label>Время окончания (HH:mm)</label>
+              <input type="text" id="bookEndTime" value="20:00">
+            </div>
+          </div>
+          <button class="btn" onclick="createBooking()">Забронировать площадку</button>
+        </div>
+
+        <!-- NEW: Matchmaking Feed (Social Player Search) -->
+        <div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(245, 158, 11, 0.3);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>⚽ Лента открытых игр (Matchmaking Feed)</span>
+            <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="loadOpenMatchmakingFeed()">🔄 Обновить ленту</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Открытые матчи, где организаторы ищут дополнительных игроков. При авто-приеме заявка одобряется мгновенно (1-Click)!
+          </p>
+          <div id="matchmakingFeedList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка открытых матчей...</div>
+          </div>
+        </div>
+
+        <!-- NEW: Occupied Slots & Request to Join -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">⚽ Занятые слоты (Присоединение к игре)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Любой пользователь может отправить заявку «Попроситься в команду» к хозяину занятого слота.
+          </p>
+          <div id="occupiedSlotsList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка занятых слотов...</div>
+          </div>
+        </div>
+
+        <!-- NEW: Host Incoming Requests -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">📩 Входящие заявки на присоединение (для Владельца слота)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Хозяин слота принимает или отклоняет заявки от игроков. При одобрении игрок автоматически получает доступ к дверям.
+          </p>
+          <div id="hostIncomingRequestsList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка ваших заявок...</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">👥 Приглашение друзей (До 15 человек на слот)</div>
+          <div class="grid-2">
+            <div>
+              <label>Сценарий 1: Ссылка-приглашение от хозяина</label>
+              <input type="text" id="inviteTokenInput" placeholder="Введите токен приглашения">
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="acceptInviteToken()">Присоединиться по ссылке (type: 'invited')</button>
+            </div>
+            <div>
+              <label>Сценарий 2: Спонтанный вход через QR на площадке</label>
+              <select id="spontaneousQrSelect">
+                <option value="QR_SCHOOL11_FOOTBALL">QR_SCHOOL11_FOOTBALL (Школа №11 - Футбол)</option>
+                <option value="QR_SCHOOL11_BASKETBALL">QR_SCHOOL11_BASKETBALL (Школа №11 - Баскетбол)</option>
+              </select>
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="spontaneousQrCheckIn()">Войти спонтанно по QR (type: 'spontaneous_check_in')</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: ADMIN MONITORING & ANALYTICS -->
+      <div id="tab-admin" class="tab-content">
+        <div class="card">
+          <div class="card-title">📊 Дашборд администратора / Аналитика сети площадок</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+            Сводные метрики использования спортивных площадок, уникальные игроки (по ИИН) и распределение нагрузки (без финансовых данных).
+          </p>
+
+          <!-- Metric Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-title">📈 Загруженность сети</div>
+              <div class="metric-val" id="analyticsOccupancy">-- %</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">👥 Уникальных игроков</div>
+              <div class="metric-val" id="analyticsUniquePlayers">-- чел.</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">🔥 Популярный час</div>
+              <div class="metric-val" style="font-size: 16px; margin-top: 4px;" id="analyticsPopularHour">--:--</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">⚽ Средняя команда</div>
+              <div class="metric-val" id="analyticsAvgTeam">-- чел./слот</div>
+            </div>
+          </div>
+
+          <!-- Heatmap Section -->
+          <div style="margin-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 style="font-size: 15px; color: #fff;">🔥 Тепловая карта загрузки площадок по часам (08:00 - 23:00)</h3>
+              <select id="analyticsVenueSelect" style="width: 280px;" onchange="loadVenueHeatmap()"></select>
+            </div>
+            <div id="venueHeatmapGrid" class="heatmap-grid">
+              <div style="font-size: 13px; color: var(--text-muted);">Загрузка тепловой карты...</div>
+            </div>
+          </div>
+
+          <!-- Players Analytics Section -->
+          <div style="margin-top: 28px;">
+            <h3 style="font-size: 15px; color: #fff; margin-bottom: 12px;">🪪 Статистика уникальных игроков по ИИН</h3>
+            <div id="venuePlayersAnalytics" class="log-box" style="max-height: 250px;">
+              Загрузка статистики игроков...
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Admin Emergency Force Unlock -->
+        <div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.08)); border: 1px solid rgba(16, 185, 129, 0.3);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🚪 Экстренное / Принудительное открытие двери (Admin Force Unlock)</span>
+            <span class="system-badge">Admin ONLY</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Прямая подача сигнала на смарт-замок TTLock через Wi-Fi шлюз без проверки бронирования. Все события фиксируются в аудите.
+          </p>
+          <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 250px;">
+              <label>Площадка для открытия:</label>
+              <select id="adminForceUnlockGroundSelect"></select>
+            </div>
+            <button class="btn" style="width: auto; background: linear-gradient(135deg, #10b981, #059669); font-weight: 700;" onclick="submitAdminForceUnlock()">
+              🔓 Принудительно открыть замок
+            </button>
+          </div>
+        </div>
+
+        <!-- New Section: Dynamic Grounds Creation -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">➕ Добавить новую площадку (Admin)</div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Название площадки</label>
+              <input type="text" id="adminGroundName" placeholder="Например: Школа №15 - Волейбол" value="Школа №15 - Волейбол">
+            </div>
+            <div class="form-group">
+              <label>Адрес</label>
+              <input type="text" id="adminGroundAddress" placeholder="ул. Абая, 45" value="ул. Абая, 45">
+            </div>
+            <div class="form-group">
+              <label>Вид спорта</label>
+              <select id="adminGroundType">
+                <option value="volleyball">🏐 Волейбол</option>
+                <option value="football">⚽ Футбол</option>
+                <option value="basketball">🏀 Баскетбол</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Стоимость (₸/час)</label>
+              <input type="number" id="adminGroundCost" value="2500">
+            </div>
+            <div class="form-group">
+              <label>Широта (Latitude)</label>
+              <input type="text" id="adminGroundLat" value="43.238949">
+            </div>
+            <div class="form-group">
+              <label>Долгота (Longitude)</label>
+              <input type="text" id="adminGroundLon" value="76.889709">
+            </div>
+          </div>
+          <button class="btn" onclick="submitCreateGround()">➕ Создать площадку & Сгенерировать QR/TTLock</button>
+        </div>
+
+        <!-- Section: No-Show Auto-Ban Engine (Automated Background Worker) -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🛡️ Комплекс безопасности (No-Show Auto-Ban & GPS)</span>
+            <span class="status-pill status-online"><span class="dot dot-online"></span> Авто-проверка каждые 60с</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+            Фоновый планировщик каждые 60 секунд под капотом проверяет просроченные бронирования (>10 минут от начала без открытия двери), автоматически переводит их в статус CANCELLED_NO_SHOW, освобождает слот в расписании и выставляет 24-часовой авто-бан организатору.
+          </p>
+        </div>
+
+        <!-- NEW: Ban Management & Amnesty Section -->
+        <div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(239, 68, 68, 0.3);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: #fca5a5;">🔒 Безопасность — Управление Банами & Амнистия</span>
+            <div style="display: flex; gap: 10px;">
+              <select id="adminBanCourtFilter" style="width: auto; padding: 4px 10px; font-size: 12px; background: rgba(0,0,0,0.4);" onchange="loadAdminBans()">
+                <option value="all">🌐 Все площадки</option>
+              </select>
+              <button class="btn" style="width: auto; padding: 5px 12px; font-size: 11px; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="unbanSelfAdmin()">🔓 Снять бан с моего аккаунта (Self-Unban Admin)</button>
+            </div>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Журнал нарушений No-Show и управление банами. Администраторы обладают полным иммунитетом от авто-бана.
+          </p>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminBansTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 8px;">Имя / ИИН / Телефон</th>
+                  <th style="padding: 8px;">Площадка нарушения</th>
+                  <th style="padding: 8px;">Причина</th>
+                  <th style="padding: 8px;">Заблокирован до</th>
+                  <th style="padding: 8px;">Статус</th>
+                  <th style="padding: 8px; text-align: right;">Действие</th>
+                </tr>
+              </thead>
+              <tbody id="adminBansTableBody">
+                <tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Загрузка списка банов...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- NEW: Registered Users List with Ban Action & Tabs -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span style="display: flex; align-items: center; gap: 8px;">👥 Пользователи системы</span>
+            <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="loadAdminUsersList()">🔄 Обновить список</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Просмотр списка зарегистрированных пользователей, отслеживание новых регистраций за последние 24 часа и ручная блокировка/разблокировка.
+          </p>
+
+          <!-- User Sub-Tabs -->
+          <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--card-border); margin-bottom: 16px; padding-bottom: 8px;">
+            <button id="userTabNewBtn" class="tab-btn active" style="font-size: 13px; padding: 6px 14px;" onclick="switchUsersSubTab('new')">
+              🆕 Новые регистрации <span id="newUsersCountBadge" style="background: var(--accent-primary); color: #000; font-size: 11px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 800;">0</span>
+            </button>
+            <button id="userTabAllBtn" class="tab-btn" style="font-size: 13px; padding: 6px 14px;" onclick="switchUsersSubTab('all')">
+              👥 Все пользователи <span id="allUsersCountBadge" style="background: rgba(255,255,255,0.1); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 800;">0</span>
+            </button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminUsersTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 8px;">ID</th>
+                  <th style="padding: 8px;">Имя / Телефон / ИИН</th>
+                  <th style="padding: 8px;">Дата и время регистрации</th>
+                  <th style="padding: 8px;">Статус / Роль</th>
+                  <th style="padding: 8px; text-align: right;">Действие</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersTableBody">
+                <tr><td colspan="5" style="padding: 12px; color: var(--text-muted);">Загрузка списка пользователей...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">⚙️ Мониторинг Wi-Fi шлюзов TTLock & Аудит</div>
+          <div id="systemStats" style="display: flex; gap: 16px; margin-bottom: 20px;">
+            <!-- Stats -->
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; margin-bottom: 10px; color: #fff;">Симуляция сбоя связи шлюза (Тест резервного PIN/eKey):</h3>
+            <div id="adminGatewaysControl"></div>
+          </div>
+
+          <div class="card-title">📜 Журнал аудита разблокировок замков</div>
+          <div id="lockAuditLogs" class="log-box" style="max-height: 250px;">
+            Загрузка логов аудита...
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: AKIMAT EXECUTIVE DASHBOARD -->
+      <div id="tab-akimat" class="tab-content">
+        <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(59, 130, 246, 0.06)); border-color: rgba(16, 185, 129, 0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <div style="font-size: 20px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px;">
+                🏛️ Дашборд Акимата — Аналитика Спортивной Инфраструктуры
+              </div>
+              <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Мониторинг доступности школьных площадок & суточной загрузки горожанами
+              </div>
+            </div>
+            <span class="status-pill status-online" style="padding: 6px 14px; font-size: 12px;">
+              <span class="dot dot-online"></span> Данные Акимата (Live API)
+            </span>
+          </div>
+
+          <!-- BLOCK 1: City Key Performance Indicators (KPI Cards) -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+            <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.05)); border: 1px solid rgba(59, 130, 246, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #93c5fd; font-weight: 600;">👥 Общий охват жителей</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiCitizens">--</div>
+              <div style="font-size: 11px; color: #60a5fa;">Уникальных горожан (по ИИН)</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.05)); border: 1px solid rgba(16, 185, 129, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #a7f3d0; font-weight: 600;">📈 Загрузка инфраструктуры</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiOccupancy">--%</div>
+              <div style="font-size: 11px; color: #34d399;">Занятость в любительское время</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #fde68a; font-weight: 600;">⚽ Проведено матчей</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiMatches">--</div>
+              <div style="font-size: 11px; color: #fbbf24;">Зафиксированных игр</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(126, 34, 206, 0.05)); border: 1px solid rgba(168, 85, 247, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #e9d5ff; font-weight: 600;">💰 Экономия бюджета</div>
+              <div style="font-size: 24px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiSavings">-- ₸</div>
+              <div style="font-size: 11px; color: #c084fc;">Автоматический доступ TTLock</div>
+            </div>
+          </div>
+
+          <!-- BLOCK 2: Interactive Chart.js Hourly Profile -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); padding: 20px; border-radius: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="font-size: 16px; color: #fff; margin: 0;">📊 Суточный профиль загрузки спортивных площадок (08:00 - 23:00)</h3>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Разделение школьного времени и любительской занятости горожанами</div>
+              </div>
+              <div style="display: flex; gap: 10px; font-size: 11px;">
+                <span style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; padding: 4px 10px; border-radius: 20px; font-weight: 600;">🏫 08:00 - 15:00 (100% Уроки физкультуры)</span>
+                <span style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #6ee7b7; padding: 4px 10px; border-radius: 20px; font-weight: 600;">⚽ 15:00 - 23:00 (Любители РК)</span>
+              </div>
+            </div>
+
+            <div style="position: relative; height: 320px; width: 100%;">
+              <canvas id="akimatHourlyChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 6: ISSUE REPORTS & USER COMPLAINTS -->
+      <div id="tab-issues" class="tab-content">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div class="card-title" style="margin-bottom: 4px; font-size: 18px; color: #fff;">
+                ⚠️ Жалобы и сообщения о проблемах от пользователей
+              </div>
+              <div style="font-size: 13px; color: var(--text-muted);">
+                Оперативный журнал инцидентов (неисправности замков, мусор, освещение, нарушения порядка).
+              </div>
+            </div>
+            <button class="btn" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="loadAdminIssues(true)">🔄 Обновить список</button>
+          </div>
+
+          <!-- KPI Counters -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Всего обращений</div>
+              <div style="font-size: 24px; font-weight: 800; color: #fff; margin-top: 4px;" id="issuesTotalKpi">0</div>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #fca5a5; font-weight: 600;">🔴 Новые (Ждут реакции)</div>
+              <div style="font-size: 24px; font-weight: 800; color: #ef4444; margin-top: 4px;" id="issuesNewKpi">0</div>
+            </div>
+            <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #fde68a; font-weight: 600;">🟡 В работе</div>
+              <div style="font-size: 24px; font-weight: 800; color: #f59e0b; margin-top: 4px;" id="issuesInProgressKpi">0</div>
+            </div>
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #a7f3d0; font-weight: 600;">🟢 Решено</div>
+              <div style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;" id="issuesResolvedKpi">0</div>
+            </div>
+          </div>
+
+          <!-- Filters Row -->
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 220px;">
+              <input type="text" id="issuesSearchInput" placeholder="🔍 Поиск по ФИО, телефону, ИИН, сути проблемы..." oninput="debounceLoadIssues()" style="padding: 10px 14px; font-size: 13px; width: 100%;">
+            </div>
+            <div>
+              <select id="issuesStatusFilter" onchange="loadAdminIssues()" style="padding: 10px 14px; font-size: 13px;">
+                <option value="ALL">📋 Все статусы</option>
+                <option value="NEW">🔴 Только новые</option>
+                <option value="IN_PROGRESS">🟡 В работе</option>
+                <option value="RESOLVED">🟢 Решенные</option>
+              </select>
+            </div>
+            <div>
+              <select id="issuesGroundFilter" onchange="loadAdminIssues()" style="padding: 10px 14px; font-size: 13px;">
+                <option value="ALL">🏟️ Все площадки</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Issues Table -->
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminIssuesTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 10px;">Дата / Время</th>
+                  <th style="padding: 10px;">Отправитель (Игрок)</th>
+                  <th style="padding: 10px;">Спортивная площадка</th>
+                  <th style="padding: 10px; width: 35%;">Суть проблемы / Сообщение</th>
+                  <th style="padding: 10px;">Статус</th>
+                  <th style="padding: 10px; text-align: right;">Действие / Смена статуса</th>
+                </tr>
+              </thead>
+              <tbody id="adminIssuesTableBody">
+                <tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">Загрузка обращений...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v1';
+    let currentUserToken = localStorage.getItem('token') || '';
+    let currentUserId = '';
+    let registeredUsers = [];
+    let activePhone = '+77715269538';
+
+    function adminFetch(url, options = {}) {
+      const token = currentUserToken || localStorage.getItem('token') || '';
+      return fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(options.headers || {}),
+        }
+      });
+    }
+
+    async function loadAllUsersFromDb() {
+      try {
+        const res = await adminFetch(`${API_BASE}/users`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          registeredUsers = data.data.map(u => ({
+            id: u.id,
+            iin: u.iin,
+            name: u.full_name + (u.role === 'admin' ? ' (Admin)' : ''),
+            phone: u.phone_number,
+            role: u.role
+          }));
+        } else {
+          registeredUsers = [
+            { iin: '890918350184', name: 'Ивкин Антон Витальевич (Admin)', phone: '+77715269538', role: 'admin' },
+            { iin: '890820350058', name: 'Бердников Дмитрий Николаевич (Admin)', phone: '+77085965198', role: 'admin' },
+            { iin: '840419350158', name: 'Харитонов Александр (Admin)', phone: '+77055896847', role: 'admin' },
+          ];
+        }
+      } catch (err) {
+        console.warn('Could not fetch users list:', err);
+      }
+      renderUserPills();
+    }
+
+    window.onload = async () => {
+      // Strict RBAC Authentication Check
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${storedToken}` }
+          });
+          const d = await res.json();
+          const r = d?.data?.role?.toLowerCase();
+          if (res.ok && (r === 'admin' || r === 'superadmin')) {
+            currentUserToken = storedToken;
+            currentUserId = d.data.id;
+            activePhone = d.data.phone_number;
+            showAlert(`Авторизован администратор: ${d.data.full_name}`, 'success');
+          } else {
+            window.location.replace('/');
+            return;
+          }
+        } catch (e) {
+          window.location.replace('/');
+          return;
+        }
+      } else {
+        window.location.replace('/');
+        return;
+      }
+
+      document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
+      await loadAllUsersFromDb();
+      await loadGrounds();
+      await loadGateways();
+      await loadOccupiedSlots();
+      await loadHostRequests();
+      await loadAdminIssues();
+      liveValidateIIN();
+
+      // Real-time Gateway & Issues Polling (every 10s)
+      setInterval(loadGateways, 10000);
+      setInterval(loadAdminIssues, 10000);
+    };
+
+    function renderUserPills() {
+      const container = document.getElementById('usersList');
+      if (!container) return;
+      container.innerHTML = registeredUsers.map(u => `
+        <div class="user-pill ${u.phone === activePhone ? 'active' : ''}" onclick="loginUser('${u.phone}', 'password123')">
+          <div class="user-name">${u.name}</div>
+          <div class="user-meta">ИИН: ${u.iin} | Тел: ${u.phone}</div>
+        </div>
+      `).join('');
+    }
+
+    async function loginUser(phone, password) {
+      activePhone = phone;
+      renderUserPills();
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone_or_iin: phone, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentUserToken = data.data.token;
+          currentUserId = data.data.user.id;
+          localStorage.setItem('token', currentUserToken);
+          showAlert(`Авторизован как: ${data.data.user.full_name} (${data.data.user.role})`, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          await loadActiveAccess();
+          await loadAdminIssues();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка подключения к API: ' + err.message, 'error');
+      }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-admin') loadAdminData();
+      if (tabId === 'tab-akimat') loadAkimatDashboard();
+      if (tabId === 'tab-issues') loadAdminIssues();
+      if (tabId === 'tab-bookings') {
+        loadOccupiedSlots();
+        loadHostRequests();
+        loadOpenMatchmakingFeed();
+      }
+    }
+
+    let issueSearchTimeout = null;
+    function debounceLoadIssues() {
+      clearTimeout(issueSearchTimeout);
+      issueSearchTimeout = setTimeout(() => loadAdminIssues(false), 300);
+    }
+
+    let isLoadingIssues = false;
+
+    async function loadAdminIssues(showLoadingIndicator = false) {
+      if (isLoadingIssues) return;
+      isLoadingIssues = true;
+
+      const tbody = document.getElementById('adminIssuesTableBody');
+      if (showLoadingIndicator && tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">⏳ Загрузка обращений...</td></tr>`;
+      }
+
+      try {
+        const status = document.getElementById('issuesStatusFilter')?.value || 'ALL';
+        const groundId = document.getElementById('issuesGroundFilter')?.value || 'ALL';
+        const search = document.getElementById('issuesSearchInput')?.value || '';
+
+        const params = new URLSearchParams();
+        if (status !== 'ALL') params.append('status', status);
+        if (groundId !== 'ALL') params.append('ground_id', groundId);
+        if (search.trim()) params.append('search', search.trim());
+
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const res = await adminFetch(`${API_BASE}/admin/issues${query}`);
+        const result = await res.json();
+
+        if (result) {
+          // Update badge and KPIs
+          const metrics = result.metrics || {};
+          const newCount = metrics.new || 0;
+          const badge = document.getElementById('issuesCountBadge');
+          if (badge) {
+            badge.innerText = newCount;
+            badge.style.display = newCount > 0 ? 'inline-block' : 'none';
+          }
+
+          if (document.getElementById('issuesTotalKpi')) document.getElementById('issuesTotalKpi').innerText = metrics.total ?? 0;
+          if (document.getElementById('issuesNewKpi')) document.getElementById('issuesNewKpi').innerText = metrics.new ?? 0;
+          if (document.getElementById('issuesInProgressKpi')) document.getElementById('issuesInProgressKpi').innerText = metrics.in_progress ?? 0;
+          if (document.getElementById('issuesResolvedKpi')) document.getElementById('issuesResolvedKpi').innerText = metrics.resolved ?? 0;
+
+          // Populate ground options in filter safely
+          const groundFilter = document.getElementById('issuesGroundFilter');
+          const groundsList = window.allGroundsData || [];
+          if (groundFilter && groundFilter.options.length <= 1 && groundsList.length > 0) {
+            groundsList.forEach(g => {
+              const opt = document.createElement('option');
+              opt.value = g.id;
+              opt.text = g.name;
+              groundFilter.appendChild(opt);
+            });
+          }
+
+          // Extract issues list supporting all payload formats
+          let issues = [];
+          if (Array.isArray(result)) {
+            issues = result;
+          } else if (Array.isArray(result.data)) {
+            issues = result.data;
+          } else if (Array.isArray(result.issues)) {
+            issues = result.issues;
+          }
+
+          if (!tbody) return;
+
+          if (issues.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px;">Обращений пока нет</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = issues.map(iss => {
+            const rawDate = iss.created_at || iss.createdAt || new Date();
+            const d = new Date(rawDate);
+            const dateStr = !isNaN(d.getTime())
+              ? d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+              : '—';
+            
+            let statusBadge = '';
+            const st = (iss.status || 'NEW').toUpperCase();
+            if (st === 'NEW') {
+              statusBadge = `<span class="tag" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">🔴 Новое</span>`;
+            } else if (st === 'IN_PROGRESS') {
+              statusBadge = `<span class="tag" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">🟡 В работе</span>`;
+            } else {
+              statusBadge = `<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">🟢 Решено</span>`;
+            }
+
+            const userName = iss.user?.full_name || iss.user?.name || 'Неизвестный';
+            const phone = iss.user?.phone_number || iss.user?.phone || '';
+            const phoneFormatted = phone ? (phone.startsWith('+') ? phone : '+' + phone) : '—';
+            const userIin = iss.user?.iin || '—';
+            const groundName = iss.ground?.name || 'Школа №11';
+            const groundAddress = iss.ground?.address || '';
+            const messageText = iss.message || '—';
+
+            return `
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top;">
+                <td style="padding: 12px 10px; font-family: monospace; font-size: 11px; color: #9ca3af; white-space: nowrap;">
+                  ${dateStr}
+                </td>
+                <td style="padding: 12px 10px;">
+                  <div style="font-weight: 700; color: #fff;">${userName}</div>
+                  <div style="font-size: 11px; margin-top: 2px;">
+                    ${phone ? `<a href="tel:${phoneFormatted}" style="color: #38bdf8; text-decoration: none; font-weight: 600;">📞 ${phoneFormatted}</a>` : '<span style="color: var(--text-muted);">—</span>'}
+                  </div>
+                  <div style="font-size: 10px; color: var(--text-muted); font-family: monospace;">ИИН: ${userIin}</div>
+                </td>
+                <td style="padding: 12px 10px;">
+                  <div style="font-weight: 600; color: #e2e8f0;">${groundName}</div>
+                  ${groundAddress ? `<div style="font-size: 11px; color: var(--text-muted);">${groundAddress}</div>` : ''}
+                  ${iss.booking ? `<div style="font-size: 10px; color: #34d399; margin-top: 2px;">Бронь: ${iss.booking.booking_date} (${iss.booking.start_time}–${iss.booking.end_time})</div>` : ''}
+                </td>
+                <td style="padding: 12px 10px; line-height: 1.4;">
+                  <div style="background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); color: #f3f4f6; font-size: 12px; white-space: pre-wrap; word-break: break-word;">${messageText}</div>
+                </td>
+                <td style="padding: 12px 10px; white-space: nowrap;">
+                  ${statusBadge}
+                </td>
+                <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
+                  <select onchange="changeIssueStatus('${iss.id}', this.value)" style="padding: 6px 10px; font-size: 11px; border-radius: 8px; background: #1e293b; color: #fff; border: 1px solid var(--card-border); cursor: pointer;">
+                    <option value="NEW" ${st === 'NEW' ? 'selected' : ''}>🔴 Новое</option>
+                    <option value="IN_PROGRESS" ${st === 'IN_PROGRESS' ? 'selected' : ''}>🟡 В работе</option>
+                    <option value="RESOLVED" ${st === 'RESOLVED' ? 'selected' : ''}>🟢 Решено</option>
+                  </select>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.error('loadAdminIssues error:', err);
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="6" style="padding: 24px; text-align: center; color: #f87171; font-size: 13px;">Ошибка загрузки обращений: ${err.message || err}</td></tr>`;
+        }
+      } finally {
+        isLoadingIssues = false;
+      }
+    }
+
+    async function changeIssueStatus(issueId, newStatus) {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/issues/${issueId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Статус жалобы успешно изменен на: ${newStatus}`, 'success');
+          await loadAdminIssues();
+        } else {
+          showAlert(data.message || 'Ошибка смены статуса', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка при смене статуса: ' + err.message, 'error');
+      }
+    }
+
+    function showAlert(msg, type = 'success') {
+      const box = document.getElementById('alertBox');
+      box.className = `alert alert-${type}`;
+      box.innerText = msg;
+      box.style.display = 'block';
+      setTimeout(() => { box.style.display = 'none'; }, 5000);
+    }
+
+    async function loadOccupiedSlots() {
+      const container = document.getElementById('occupiedSlotsList');
+      if (!container) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/all`);
+        const data = await res.json();
+        if (!data.success || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Нет активных забронированных слотов.</div>';
+          return;
+        }
+
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+
+        container.innerHTML = data.data.map(b => {
+          const totalParticipants = 1 + (b.guests ? b.guests.length : 0);
+          const isHost = b.host_user_id === currentUserId;
+          const isGuest = b.guests && b.guests.some(g => g.user_id === currentUserId);
+          const myRequest = b.joinRequests && b.joinRequests.find(r => currentActiveUser && r.user_iin === currentActiveUser.iin);
+
+          let actionBtn = '';
+          if (isHost) {
+            actionBtn = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="system-badge">👑 Вы хозяин слота</span>
+                <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px;" onclick="cancelBookingSlot('${b.id}')">🚫 Отменить бронь</button>
+              </div>
+            `;
+          } else if (isGuest) {
+            actionBtn = '<span class="system-badge">✅ Вы игрок команды</span>';
+          } else if (myRequest) {
+            if (myRequest.status === 'PENDING') {
+              actionBtn = '<span class="status-pill status-offline">⏳ Заявка отправлена</span>';
+            } else if (myRequest.status === 'APPROVED') {
+              actionBtn = '<span class="status-pill status-online">🎉 Заявка одобрена!</span>';
+            } else {
+              actionBtn = '<span class="status-pill status-offline">❌ Заявка отклонена</span>';
+            }
+          } else {
+            actionBtn = `<button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px;" onclick="requestJoinSlot('${b.id}')">🙋 Попроситься в команду</button>`;
+          }
+
+          let guestsListHtml = '';
+          if (b.guests && b.guests.length > 0) {
+            guestsListHtml = `
+              <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Присоединенные участники:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  ${b.guests.map(g => `
+                    <span style="background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <span>👤 ${g.user?.full_name || 'Гость'}</span>
+                      ${isHost ? `<button onclick="removeGuestFromSlot('${b.id}', '${g.id}')" title="Удалить из слота" style="background: none; border: none; color: #f87171; font-size: 14px; cursor: pointer; padding: 0 2px; font-weight: bold;">✕</button>` : ''}
+                    </span>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+          }
+
+          let matchmakingHostControlHtml = '';
+          if (isHost) {
+            matchmakingHostControlHtml = `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.04); padding: 10px; border-radius: 8px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fde68a; margin-bottom: 8px;">
+                  🔍 Настройки Matchmaking (Поиск игроков в команду)
+                </div>
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px;">
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="mmLooking_${b.id}" ${b.is_looking_for_players ? 'checked' : ''} style="accent-color: #f59e0b;" onchange="toggleAutoApproveCheck('${b.id}')">
+                    🔥 Ищем игроков
+                  </label>
+
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="color: var(--text-muted);">Требуется:</span>
+                    <input type="number" id="mmNeeded_${b.id}" value="${b.needed_players_count || 1}" min="1" max="14" style="width: 50px; padding: 2px 6px; font-size: 12px;">
+                    <span style="color: var(--text-muted);">чел.</span>
+                  </div>
+
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="mmAuto_${b.id}" ${b.auto_approve_players ? 'checked' : ''} ${!b.is_looking_for_players ? 'disabled' : ''} style="accent-color: #10b981;">
+                    ⚡ Авто-прием заявок
+                  </label>
+
+                  <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #f59e0b, #d97706);" onclick="saveMatchmakingSettings('${b.id}')">💾 Сохранить</button>
+                </div>
+              </div>
+            `;
+          }
+
+          return `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 700; font-size: 14px; color: #fff;">${b.ground.name}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    📅 ${b.booking_date} (${b.start_time} - ${b.end_time}) | 👤 Хозяин: <b>${b.host_user?.full_name || 'Неизвестен'}</b>
+                  </div>
+                  <div style="font-size: 12px; color: #34d399; margin-top: 4px;">
+                    👥 Участников: <b>${totalParticipants}/15</b> ${b.is_looking_for_players ? `<span style="color: #fbbf24; margin-left: 8px;">🔥 Ищем ${b.needed_players_count} чел.${b.auto_approve_players ? ' (⚡ Авто-прием)' : ''}</span>` : ''}
+                  </div>
+                </div>
+                <div>${actionBtn}</div>
+              </div>
+              ${guestsListHtml}
+              ${matchmakingHostControlHtml}
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки слотов</div>';
+      }
+    }
+
+    async function loadHostRequests() {
+      const container = document.getElementById('hostIncomingRequestsList');
+      if (!container) return;
+
+      try {
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+        const headers = { 'Authorization': `Bearer ${currentUserToken}` };
+        if (currentActiveUser) headers['x-user-iin'] = currentActiveUser.iin;
+
+        const res = await fetch(`${API_BASE}/bookings/requests`, { headers });
+        const data = await res.json();
+        
+        if (!data.success || !data.data || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Входящих заявок на присоединение нет.</div>';
+          return;
+        }
+
+        container.innerHTML = data.data.map(r => {
+          let statusBadge = '';
+          let actionButtons = '';
+          if (r.status === 'PENDING_SPONTANEOUS') {
+            statusBadge = '<span class="status-pill status-offline" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">⚡ Спонтанный вход у калитки</span>';
+            actionButtons = `
+              <button class="btn" style="width: auto; padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="respondJoinRequest('${r.id}', 'APPROVED')">✅ Принять & Открыть замок</button>
+              <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin-left: 6px;" onclick="respondJoinRequest('${r.id}', 'REJECTED')">❌ Отклонить</button>
+            `;
+          } else if (r.status === 'PENDING') {
+            statusBadge = '<span class="status-pill status-offline">⏳ На рассмотрении</span>';
+            actionButtons = `
+              <button class="btn" style="width: auto; padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="respondJoinRequest('${r.id}', 'APPROVED')">✅ Принять</button>
+              <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin-left: 6px;" onclick="respondJoinRequest('${r.id}', 'REJECTED')">❌ Отклонить</button>
+            `;
+          } else if (r.status === 'APPROVED') {
+            statusBadge = '<span class="status-pill status-online">✅ Одобрено</span>';
+          } else {
+            statusBadge = '<span class="status-pill status-offline">❌ Отклонено</span>';
+          }
+
+          const groundName = r.booking?.ground?.name || 'Спортивная площадка';
+          const bookingDate = r.booking?.booking_date || '';
+          const bookingTime = r.booking ? `${r.booking.start_time} - ${r.booking.end_time}` : '';
+          const applicantFullName = (r.user_name && !r.user_name.includes('?')) ? r.user_name : (r.user?.full_name || 'Участник');
+
+          return `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 700; font-size: 14px; color: #fff;">👤 ${applicantFullName}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  ИИН: <b>${r.user_iin}</b> | Тел: <b>${r.user_phone}</b>
+                </div>
+                <div style="font-size: 12px; color: #60a5fa; margin-top: 4px;">
+                  🏟️ ${groundName} (${bookingDate} ${bookingTime})
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${statusBadge}
+                ${actionButtons}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки входящих заявок</div>';
+      }
+    }
+
+    async function requestJoinSlot(bookingId) {
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/request-join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка: ' + err.message, 'error');
+      }
+    }
+
+    async function respondJoinRequest(requestId, status) {
+      try {
+        const res = await fetch(`${API_BASE}/bookings/requests/${requestId}/respond`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify({ status })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка: ' + err.message, 'error');
+      }
+    }
+
+    async function cancelBookingSlot(bookingId) {
+      if (!confirm('Вы действительно хотите отменить это бронирование? Права доступа к замкам будут аннулированы, а слот станет доступным для других.')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка отмены: ' + err.message, 'error');
+      }
+    }
+
+    async function removeGuestFromSlot(bookingId, guestId) {
+      if (!confirm('Вы действительно хотите удалить этого участника из слота? Права доступа к замкам будут мгновенно аннулированы.')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/guests/${guestId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка удаления участника: ' + err.message, 'error');
+      }
+    }
+
+    async function loadGrounds() {
+      const res = await fetch(`${API_BASE}/grounds`);
+      const data = await res.json();
+      if (!data.success) return;
+
+      window.allGroundsData = data.data;
+      const grid = document.getElementById('groundsGrid');
+      const select = document.getElementById('bookGroundSelect');
+      const qrSelect = document.getElementById('qrUnlockTokenSelect');
+      
+      grid.innerHTML = data.data.map(g => `
+        <div class="ground-card">
+          <div class="ground-header">
+            <span class="ground-title">${g.name}</span>
+            <div>
+              <span class="tag tag-${g.type}">${g.type}</span>
+              <button class="btn" style="width: auto; padding: 2px 8px; font-size: 11px; margin-left: 6px; background: rgba(255,255,255,0.1);" onclick="openEditGroundModal('${g.id}')">✏️ Редактировать</button>
+            </div>
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted);">${g.address}</div>
+          <div style="font-size: 13px; margin-top: 6px;">
+            💰 Стоимость: <b>${g.cost_per_hour === 0 ? '0 ₸ (Бесплатно)' : g.cost_per_hour + ' ₸/час'}</b> | 📍 ${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} (Радиус: ${g.allowed_radius_meters || 50}м)
+          </div>
+          <div class="qr-badge">🚪 QR дверного замка: ${g.qr_code_token}</div>
+        </div>
+      `).join('');
+
+      select.innerHTML = data.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      if (qrSelect) {
+        qrSelect.innerHTML = data.data.map(g => `<option value="${g.qr_code_token}">${g.qr_code_token} (${g.name})</option>`).join('');
+      }
+    }
+
+    let isLoadingLockStatus = false;
+
+    async function loadGateways(showIndicator = false) {
+      if (isLoadingLockStatus) return;
+      isLoadingLockStatus = true;
+
+      const container = document.getElementById('gatewaysList');
+      if (showIndicator && container) {
+        container.innerHTML = `<div style="font-size: 12px; color: var(--text-muted); padding: 8px 0; text-align: center;">⏳ Синхронизация с замком...</div>`;
+      }
+
+      try {
+        // Fetch Lock Status & Gateways concurrently
+        const [lockRes, gwRes] = await Promise.allSettled([
+          adminFetch(`${API_BASE}/locks/34275770/status`),
+          adminFetch(`${API_BASE}/admin/gateways`)
+        ]);
+
+        let lockData = {
+          lockId: 34275770,
+          name: 'Школа №11 (Замок 34275770)',
+          isOnline: true,
+          electricQuantity: 85,
+          state: 'LOCKED',
+          wifiGateway: 'ONLINE',
+          lastSync: new Date().toISOString()
+        };
+
+        if (lockRes.status === 'fulfilled') {
+          try {
+            const parsed = await lockRes.value.json();
+            if (parsed.success && parsed.data) {
+              lockData = { ...lockData, ...parsed.data };
+            } else if (parsed.lockId) {
+              lockData = { ...lockData, ...parsed };
+            }
+          } catch(e) {}
+        }
+
+        let gateways = [];
+        if (gwRes.status === 'fulfilled') {
+          try {
+            const parsedGw = await gwRes.value.json();
+            if (parsedGw.success && Array.isArray(parsedGw.data)) {
+              gateways = parsedGw.data;
+            }
+          } catch(e) {}
+        }
+
+        if (!container) return;
+
+        const isOnline = Boolean(lockData.isOnline);
+        const battery = lockData.electricQuantity ?? 85;
+        const stateText = (lockData.state === 'UNLOCKED') ? '🔓 Разблокирован' : '🔒 Заблокирован (Готов к сеансам)';
+        const lastSyncDate = lockData.lastSync ? new Date(lockData.lastSync) : new Date();
+        const syncTimeStr = !isNaN(lastSyncDate.getTime()) ? lastSyncDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Только что';
+
+        let batteryColor = '#10b981';
+        if (battery < 20) batteryColor = '#ef4444';
+        else if (battery < 50) batteryColor = '#f59e0b';
+
+        container.innerHTML = `
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
+            <!-- Online status & Name -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span class="status-pill status-${isOnline ? 'online' : 'offline'}" style="font-size: 11px; padding: 2px 8px; border: 1px solid ${isOnline ? 'rgba(52, 211, 153, 0.3)' : 'rgba(239, 68, 68, 0.3)'};">
+                <span class="dot dot-${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? '🟢 В сети (Direct Wi-Fi)' : '🔴 Офлайн'}
+              </span>
+              <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">Синхр: ${syncTimeStr}</span>
+            </div>
+
+            <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+              ${lockData.name || 'Школа №11'}
+            </div>
+
+            <!-- Parameters Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; margin-bottom: 10px; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <div>
+                <span style="color: var(--text-muted);">Батарея:</span>
+                <span style="font-weight: 700; color: ${batteryColor}; margin-left: 4px;">🔋 ${battery}%</span>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">Шлюз:</span>
+                <span style="font-weight: 600; color: #38bdf8; margin-left: 4px;">📶 ${lockData.wifiGateway || 'ONLINE'}</span>
+              </div>
+              <div style="grid-column: span 2; display: flex; align-items: center; gap: 4px;">
+                <span style="color: var(--text-muted);">Состояние:</span>
+                <span style="font-weight: 600; color: ${lockData.state === 'UNLOCKED' ? '#34d399' : '#e2e8f0'}; margin-left: 4px;">${stateText}</span>
+              </div>
+            </div>
+
+            <!-- Emergency Force Unlock Button -->
+            <button class="btn btn-danger" style="width: 100%; padding: 7px 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="quickForceUnlock()">
+              <span>⚡ Экстренно открыть замок</span>
+            </button>
+          </div>
+
+          ${gateways && gateways.length > 0 ? `
+            <div style="margin-top: 8px;">
+              <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">
+                📡 Wi-Fi Шлюзы площадок:
+              </div>
+              ${gateways.map(gw => {
+                const gwOnline = gw.isOnline !== undefined ? Boolean(gw.isOnline) : (gw.status === 'online');
+                const gwClass = gwOnline ? 'online' : 'offline';
+                return `
+                  <div style="margin-bottom: 6px; padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 8px; font-size: 11px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <div style="font-weight: 600; color: #e2e8f0;">${gw.gateway_name}</div>
+                      <span class="status-pill status-${gwClass}" style="font-size: 10px; padding: 1px 6px; margin-top: 2px;">
+                        <span class="dot dot-${gwClass}"></span> ${gwOnline ? 'В сети' : 'Отключен'}
+                      </span>
+                    </div>
+                    <button class="btn" style="width: auto; padding: 3px 8px; font-size: 10px; font-weight: bold; background: ${gwOnline ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}; border: 1px solid ${gwOnline ? '#ef4444' : '#10b981'}; color: ${gwOnline ? '#fca5a5' : '#6ee7b7'};" onclick="toggleGateway('${gw.id}', '${gwOnline ? 'offline' : 'online'}')">
+                      ${gwOnline ? '🔴 Выкл' : '🟢 Вкл'}
+                    </button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
+        `;
+      } catch (err) {
+        console.error('Error loading gateways:', err);
+        if (container) {
+          container.innerHTML = `
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span class="status-pill status-online" style="font-size: 11px; padding: 2px 8px;">
+                  <span class="dot dot-online"></span> 🟢 В сети (Direct Wi-Fi)
+                </span>
+                <span style="font-weight: 700; color: #10b981; font-size: 11px;">🔋 85%</span>
+              </div>
+              <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 8px;">Школа №11 (Замок 34275770)</div>
+              <button class="btn btn-danger" style="width: 100%; padding: 7px 12px; font-size: 11px; font-weight: 700;" onclick="quickForceUnlock()">
+                ⚡ Экстренно открыть замок
+              </button>
+            </div>
+          `;
+        }
+      } finally {
+        isLoadingLockStatus = false;
+      }
+    }
+
+    async function quickForceUnlock() {
+      if (!confirm('Вы действительно хотите принудительно открыть смарт-замок (Школа №11, ID 34275770)?')) return;
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/locks/force-unlock`, {
+          method: 'POST',
+          body: JSON.stringify({ lockId: '34275770' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Замок успешно открыт администратором!', 'success');
+          await loadGateways(true);
+        } else {
+          showAlert(data.message || 'Ошибка открытия замка', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка экстренного открытия замка: ' + err.message, 'error');
+      }
+    }
+
+    async function toggleGateway(gatewayId, targetStatus) {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/gateways/toggle`, {
+          method: 'POST',
+          body: JSON.stringify({ gateway_id: gatewayId, status: targetStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadGateways();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка изменения статуса шлюза: ' + err.message, 'error');
+      }
+    }
+
+    async function submitCreateGround() {
+      const name = document.getElementById('adminGroundName').value.trim();
+      const address = document.getElementById('adminGroundAddress').value.trim();
+      const type = document.getElementById('adminGroundType').value;
+      const cost_per_hour = document.getElementById('adminGroundCost').value;
+      const latitude = document.getElementById('adminGroundLat').value;
+      const longitude = document.getElementById('adminGroundLon').value;
+
+      if (!name || !address) {
+        showAlert('Заполните название и адрес площадки', 'error');
+        return;
+      }
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/grounds`, {
+          method: 'POST',
+          body: JSON.stringify({ name, address, type, cost_per_hour, latitude, longitude, allowed_radius_meters: 50 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Площадка "${name}" успешно создана!`, 'success');
+          await loadGrounds();
+          await loadGateways();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка создания площадки: ' + err.message, 'error');
+      }
+    }
+
+    async function triggerCheckNoShows() {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/bookings/check-noshows?simulate=true`, {
+          method: 'POST',
+          body: JSON.stringify({ simulate10Min: true })
+        });
+        const data = await res.json();
+        const resultBox = document.getElementById('noShowEngineResult');
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          resultBox.innerText = JSON.stringify(data, null, 2);
+        }
+        if (data.success) {
+          showAlert(`Проверка неявок завершена. Аннулировано сеансов: ${data.data.noShowsCount}`, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        }
+      } catch (err) {
+        showAlert('Ошибка проверки неявок: ' + err.message, 'error');
+      }
+    }
+
+    function getSimulatedGps() {
+      const select = document.getElementById('gpsSimulationSelect');
+      if (select && select.value === 'far_away') {
+        return { userLatitude: 43.350000, userLongitude: 76.950000 };
+      }
+      return {};
+    }
+
+    async function unlockAppButton() {
+      const booking_id = document.getElementById('appUnlockBookingId').value.trim();
+      const gps = getSimulatedGps();
+      const bodyObj = booking_id ? { booking_id, ...gps } : { ...gps };
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/unlock-button`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+        const data = await res.json();
+        document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+        if (data.success) {
+          showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    async function unlockQrCode() {
+      const qr_code_token = document.getElementById('qrUnlockTokenSelect').value;
+      const gps = getSimulatedGps();
+      const res = await fetch(`${API_BASE}/locks/unlock-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token, ...gps })
+      });
+      const data = await res.json();
+      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+      if (data.success) {
+        showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function liveValidateIIN() {
+      const iin = document.getElementById('testIinInput').value;
+      const res = await fetch(`${API_BASE}/iin/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iin })
+      });
+      const data = await res.json();
+      const log = document.getElementById('iinCalcResult');
+
+      if (data.success && data.data.isValid) {
+        const d = data.data;
+        const formattedDate = new Date(d.birthDate).toLocaleDateString('ru-RU');
+        log.innerHTML = `✅ <b>ИИН ВАЛИДЕН</b>\n🎂 Дата рождения: ${formattedDate}\n👤 Пол: ${d.gender === 'male' ? 'Мужской (Код ' + iin[6] + ')' : 'Женский (Код ' + iin[6] + ')'}\n🔢 Контрольный разряд: Сверен (12-я цифра = ${iin[11]})`;
+        log.style.color = '#34d399';
+      } else {
+        log.innerHTML = `❌ <b>ОШИБКА ВАЛИДАЦИИ ИИН</b>\nПричина: ${data.data?.error || 'Неверный формат'}`;
+        log.style.color = '#f87171';
+      }
+    }
+
+    async function submitRegistration() {
+      const iin = document.getElementById('testIinInput').value;
+      const full_name = document.getElementById('regFullName').value;
+      const phone_number = document.getElementById('regPhone').value;
+      const password = document.getElementById('regPassword').value;
+
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iin, full_name, phone_number, password })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+        await loadAllUsersFromDb();
+        if (typeof loadAdminUsersList === 'function') await loadAdminUsersList();
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function createBooking() {
+      const ground_id = document.getElementById('bookGroundSelect').value;
+      const booking_date = document.getElementById('bookDate').value;
+      const start_time = document.getElementById('bookStartTime').value;
+      const end_time = document.getElementById('bookEndTime').value;
+
+      const res = await fetch(`${API_BASE}/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ ground_id, booking_date, start_time, end_time })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showAlert(`Бронь создана! Token приглашения: ${data.data.invite_token}`, 'success');
+        document.getElementById('appUnlockBookingId').value = data.data.id;
+        document.getElementById('inviteTokenInput').value = data.data.invite_token;
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function acceptInviteToken() {
+      const token = document.getElementById('inviteTokenInput').value;
+      const res = await fetch(`${API_BASE}/invitations/${token}/accept`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${currentUserToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function spontaneousQrCheckIn() {
+      const qr_code_token = document.getElementById('spontaneousQrSelect').value;
+      const res = await fetch(`${API_BASE}/grounds/qr-check-in`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function unlockAppButton() {
+      const booking_id = document.getElementById('appUnlockBookingId').value.trim();
+      const bodyObj = booking_id ? { booking_id } : {};
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/unlock-button`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+        const data = await res.json();
+        document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+        if (data.success) {
+          showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    async function loadActiveAccess() {
+      const banner = document.getElementById('activeAccessBanner');
+      if (!banner) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/active-access`, {
+          headers: { 'Authorization': `Bearer ${currentUserToken}` }
+        });
+        const data = await res.json();
+
+        if (data.success && data.hasAccess) {
+          const d = data.data;
+          banner.style.background = 'rgba(16, 185, 129, 0.12)';
+          banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+          banner.style.color = '#34d399';
+          banner.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                🟢 <b>У вас есть активный доступ к площадке!</b><br>
+                <span style="font-size: 12px; color: #a7f3d0;">🏟️ ${d.ground_name} (${d.timeSlot}) | 👤 ${d.role}</span>
+              </div>
+              <button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unlockAppButton()">🔓 1-Click Открыть</button>
+            </div>
+          `;
+          if (d.qr_code_token) {
+            document.getElementById('qrUnlockTokenSelect').value = d.qr_code_token;
+          }
+        } else {
+          banner.style.background = 'rgba(255, 255, 255, 0.03)';
+          banner.style.borderColor = 'var(--card-border)';
+          banner.style.color = 'var(--text-muted)';
+          banner.innerHTML = `<div>⚪ У вас нет активных бронирований на текущее время. Доступ будет предоставлен в время забронированного сеанса.</div>`;
+        }
+      } catch (err) {
+        banner.innerHTML = `<div>⚪ Статус доступа не определен</div>`;
+      }
+    }
+
+    async function unlockQrCode() {
+      const qr_code_token = document.getElementById('qrUnlockTokenSelect').value;
+      const res = await fetch(`${API_BASE}/locks/unlock-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token })
+      });
+      const data = await res.json();
+      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function loadAdminData() {
+      await loadAdminAnalytics();
+      await loadAdminBans();
+      await loadAdminUsersList();
+
+      const res = await adminFetch(`${API_BASE}/admin/gateways`);
+      const data = await res.json();
+      if (data.success) {
+        const ctrl = document.getElementById('adminGatewaysControl');
+        ctrl.innerHTML = data.data.map(gw => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
+            <div><b>${gw.gateway_name}</b> (Статус: ${gw.status})</div>
+            <button class="${gw.status === 'online' ? 'btn btn-danger' : 'btn'}" style="width:auto; padding:6px 12px;" onclick="toggleGateway('${gw.id}', '${gw.status === 'online' ? 'offline' : 'online'}')">
+              Переключить в ${gw.status === 'online' ? 'ОФЛАЙН (Сбой 5G)' : 'ОНЛАЙН'}
+            </button>
+          </div>
+        `).join('');
+      }
+
+      const logRes = await adminFetch(`${API_BASE}/admin/lock-logs`);
+      const logData = await logRes.json();
+      if (logData.success) {
+        document.getElementById('lockAuditLogs').innerText = JSON.stringify(logData.data, null, 2);
+      }
+    }
+
+    async function loadAdminAnalytics() {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/analytics/overview`);
+        const data = await res.json();
+        if (data.success) {
+          const d = data.data;
+          document.getElementById('analyticsOccupancy').innerText = `${d.occupancyPercentage}%`;
+          document.getElementById('analyticsUniquePlayers').innerText = `${d.uniquePlayersCount} чел.`;
+          document.getElementById('analyticsPopularHour').innerText = d.mostPopularHour;
+          document.getElementById('analyticsAvgTeam').innerText = `${d.averageTeamSize} чел.`;
+        }
+
+        const groundsRes = await fetch(`${API_BASE}/grounds`);
+        const groundsData = await groundsRes.json();
+        if (groundsData.success) {
+          const select = document.getElementById('analyticsVenueSelect');
+          if (select) select.innerHTML = groundsData.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+          
+          const forceUnlockSelect = document.getElementById('adminForceUnlockGroundSelect');
+          if (forceUnlockSelect) forceUnlockSelect.innerHTML = groundsData.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+
+          if (groundsData.data.length && select) {
+            await loadVenueHeatmap();
+            await loadVenuePlayers();
+          }
+        }
+      } catch (err) {
+        console.error('Analytics load error:', err);
+      }
+    }
+
+    async function submitAdminForceUnlock() {
+      const groundId = document.getElementById('adminForceUnlockGroundSelect')?.value;
+      if (!confirm('Вы действительно хотите принудительно открыть замок на выбранной площадке?')) {
+        return;
+      }
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/locks/force-unlock`, {
+          method: 'POST',
+          body: JSON.stringify({ groundId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Замок успешно открыт!', 'success');
+          await loadAdminData();
+        } else {
+          showAlert(data.message || 'Ошибка принудительного открытия', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сети: ' + err.message, 'error');
+      }
+    }
+
+    async function loadVenueHeatmap() {
+      const select = document.getElementById('analyticsVenueSelect');
+      if (!select) return;
+      const venueId = select.value;
+      if (!venueId) return;
+
+      const container = document.getElementById('venueHeatmapGrid');
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/analytics/venues/${venueId}/heatmap`);
+        const data = await res.json();
+        if (data.success) {
+          const d = data.data;
+          container.innerHTML = d.hourlyMatrix.map(slot => `
+            <div class="heatmap-cell level-${slot.level}">
+              <div style="font-size: 13px; font-weight: 700; color: #fff;">${slot.timeSlot}</div>
+              <div style="font-size: 12px; margin-top: 4px;">📅 Слотов: <b>${slot.bookingsCount}</b></div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">👥 Игроков: ${slot.totalPlayers}</div>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки тепловой карты</div>';
+      }
+    }
+
+    async function loadVenuePlayers() {
+      const select = document.getElementById('analyticsVenueSelect');
+      if (!select) return;
+      const venueId = select.value;
+      if (!venueId) return;
+
+      const container = document.getElementById('venuePlayersAnalytics');
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/analytics/venues/${venueId}/players`);
+        const data = await res.json();
+        if (data.success) {
+          container.innerText = JSON.stringify(data.data, null, 2);
+        }
+      } catch (err) {
+        container.innerText = 'Ошибка загрузки игроков';
+      }
+    }
+
+    async function toggleGateway(gateway_id, status) {
+      await fetch(`${API_BASE}/admin/gateways/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gateway_id, status })
+      });
+      await loadGateways();
+      await loadAdminData();
+    }
+
+    async function submitRegistration() {
+      const iin = document.getElementById('testIinInput').value.trim();
+      const fullName = document.getElementById('regFullName').value.trim();
+      const phone = document.getElementById('regPhone').value.trim();
+      const password = document.getElementById('regPassword').value;
+
+      if (!iin || !fullName || !phone || !password) {
+        showAlert('Заполните все поля (ИИН, ФИО, Телефон, Пароль)', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iin, fullName, phone, password, confirmPassword: password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Пользователь "${fullName}" успешно зарегистрирован!`, 'success');
+          const formattedPhone = data.data.user?.phone_number || phone;
+          presetUsers.push({
+            iin,
+            name: fullName,
+            phone: formattedPhone,
+            role: 'client'
+          });
+          renderUserPills();
+          await loginUser(formattedPhone, password);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка регистрации: ' + err.message, 'error');
+      }
+    }
+
+    function toggleRegisterModal(show) {
+      const modal = document.getElementById('registerUserModal');
+      modal.style.display = show ? 'flex' : 'none';
+      if (show) validateModalIin();
+    }
+
+    async function validateModalIin() {
+      const iin = document.getElementById('modalRegIin').value;
+      const statusBox = document.getElementById('modalIinStatus');
+      if (!statusBox) return;
+
+      if (iin.length !== 12) {
+        statusBox.innerText = `Длина: ${iin.length}/12 цифр`;
+        statusBox.style.color = 'var(--text-muted)';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/iin/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iin })
+        });
+        const data = await res.json();
+        if (data.success && data.data.isValid) {
+          const genderText = data.data.gender === 'male' ? 'Мужской' : 'Женский';
+          statusBox.innerHTML = `✅ <b>ИИН валиден</b> (${genderText})`;
+          statusBox.style.color = '#34d399';
+        } else {
+          statusBox.innerHTML = `❌ ${data.data?.error || 'Неверный ИИН'}`;
+          statusBox.style.color = '#f87171';
+        }
+      } catch (err) {
+        statusBox.innerText = 'Ошибка проверки ИИН';
+      }
+    }
+
+    function liveValidateModalPass() {
+      const pass = document.getElementById('modalRegPassword').value;
+      const confirmPass = document.getElementById('modalRegConfirmPassword').value;
+      return validatePasswordComplexity(pass, confirmPass, 'modalPassStatus');
+    }
+
+    function liveValidateTabPass() {
+      const pass = document.getElementById('regPassword').value;
+      const confirmPass = document.getElementById('regConfirmPassword') ? document.getElementById('regConfirmPassword').value : pass;
+      return validatePasswordComplexity(pass, confirmPass, 'regPassStatus');
+    }
+
+    function validatePasswordComplexity(pass, confirmPass, statusElementId) {
+      const el = document.getElementById(statusElementId);
+      if (!el) return false;
+
+      const lenValid = pass.length >= 6;
+      const letterValid = /[a-zA-Zа-яА-Я]/.test(pass);
+      const digitValid = /[0-9]/.test(pass);
+      const complexityValid = letterValid && digitValid;
+      const matchValid = confirmPass.length > 0 && pass === confirmPass;
+
+      let html = `
+        <div style="display: flex; gap: 12px; font-size: 11px; margin-top: 4px;">
+          <span>${lenValid ? '🟢' : '🔴'} Длина ≥ 6</span>
+          <span>${complexityValid ? '🟢' : '🔴'} Буква и цифра</span>
+          <span>${matchValid ? '🟢' : '🔴'} Совпадают</span>
+        </div>
+      `;
+      el.innerHTML = html;
+
+      return lenValid && complexityValid && matchValid;
+    }
+
+    async function submitModalUserRegistration() {
+      const fullName = document.getElementById('modalRegFullName').value.trim();
+      const iin = document.getElementById('modalRegIin').value.trim();
+      const phone = document.getElementById('modalRegPhone').value.trim();
+      const password = document.getElementById('modalRegPassword').value;
+      const confirmPassword = document.getElementById('modalRegConfirmPassword').value;
+
+      if (!fullName || !iin || !phone || !password || !confirmPassword) {
+        showAlert('Заполните все поля (ФИО, ИИН, Телефон, Пароль, Подтверждение)', 'error');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        showAlert('Введенные пароли не совпадают!', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName, iin, phone, password, confirmPassword })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showAlert(`Пользователь "${fullName}" успешно зарегистрирован!`, 'success');
+          
+          const formattedPhone = data.data.user?.phone_number || phone;
+          presetUsers.push({
+            iin,
+            name: fullName,
+            phone: formattedPhone,
+            role: 'client'
+          });
+
+          toggleRegisterModal(false);
+          renderUserPills();
+          await loginUser(formattedPhone, password);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка регистрации: ' + err.message, 'error');
+      }
+    }
+
+    async function openEditGroundModal(groundId) {
+      const g = (window.allGroundsData || []).find(item => item.id === groundId);
+      if (!g) return;
+
+      document.getElementById('editGroundId').value = g.id;
+      document.getElementById('editGroundName').value = g.name;
+      document.getElementById('editGroundAddress').value = g.address;
+      document.getElementById('editGroundType').value = g.type;
+      document.getElementById('editGroundCost').value = g.cost_per_hour;
+      document.getElementById('editGroundLat').value = g.latitude;
+      document.getElementById('editGroundLon').value = g.longitude;
+      document.getElementById('editGroundRadius').value = g.allowed_radius_meters || 50;
+      document.getElementById('editGroundIsSchool').checked = g.is_school_court !== false;
+      document.getElementById('editGroundSchoolStart').value = g.school_hours_start || '08:00';
+      document.getElementById('editGroundSchoolEnd').value = g.school_hours_end || '15:00';
+      document.getElementById('editGroundSchoolDays').value = g.school_days || 'MON_FRI';
+
+      // Fetch active bans for this ground
+      const bansContainer = document.getElementById('editGroundBansList');
+      const countEl = document.getElementById('editGroundBansCount');
+      if (bansContainer) {
+        bansContainer.innerHTML = 'Загрузка...';
+        try {
+          const res = await adminFetch(`${API_BASE}/admin/bans?courtId=${g.id}`);
+          const data = await res.json();
+          const bans = (data.data?.bansHistory || []).filter(b => !b.is_resolved);
+          if (countEl) countEl.innerText = `${bans.length} активных банов`;
+
+          if (bans.length === 0) {
+            bansContainer.innerHTML = '<div style="color: #34d399;">Нарушений и активных банов на этой площадке нет 🎉</div>';
+          } else {
+            bansContainer.innerHTML = bans.map(b => `
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div>
+                  <span style="color: #fff; font-weight: 600;">${b.user?.full_name || 'Пользователь'}</span>
+                  <span style="color: #fca5a5;">(${b.reason})</span>
+                </div>
+                <button class="btn" style="width: auto; padding: 2px 8px; font-size: 10px; background: #10b981;" onclick="unbanUserByAdmin('${b.user_id}'); toggleEditGroundModal(false);">🔓 Снять бан</button>
+              </div>
+            `).join('');
+          }
+        } catch (e) {
+          bansContainer.innerHTML = 'Ошибка загрузки банов';
+        }
+      }
+
+      toggleEditGroundModal(true);
+    }
+
+    async function loadAdminBans() {
+      const courtFilter = document.getElementById('adminBanCourtFilter')?.value || 'all';
+      const tableBody = document.getElementById('adminBansTableBody');
+      const selectFilter = document.getElementById('adminBanCourtFilter');
+      if (!tableBody) return;
+
+      try {
+        if (selectFilter && selectFilter.options.length <= 1 && window.allGroundsData) {
+          window.allGroundsData.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.innerText = g.name;
+            selectFilter.appendChild(opt);
+          });
+        }
+
+        const res = await adminFetch(`${API_BASE}/admin/bans?courtId=${courtFilter}`);
+        const data = await res.json();
+
+        if (!data.success || !data.data) {
+          tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: #f87171;">Ошибка загрузки списка банов</td></tr>';
+          return;
+        }
+
+        const bans = data.data.bansHistory || [];
+        const currentlyBannedUsers = data.data.currentlyBannedUsers || [];
+
+        if (bans.length === 0 && currentlyBannedUsers.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Активных банов и нарушений на выбранных площадках не зафиксировано 🎉</td></tr>';
+          return;
+        }
+
+        tableBody.innerHTML = bans.map(b => {
+          const isResolved = b.is_resolved;
+          const user = b.user || {};
+          const ground = b.ground || null;
+          const bannedUntilStr = user.banned_until ? new Date(user.banned_until).toLocaleString('ru-RU') : (b.banned_until ? new Date(b.banned_until).toLocaleString('ru-RU') : '24 часа');
+          const groundDisplayName = ground && ground.name ? ground.name : '🌐 Все площадки (Глобальный)';
+
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 8px;">
+                <div style="font-weight: 700; color: #fff;">${user.full_name || 'Неизвестен'} ${user.role === 'admin' ? '<span class="system-badge">Admin</span>' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">ИИН: ${user.iin || '--'} | Тел: ${user.phone_number || '--'}</div>
+              </td>
+              <td style="padding: 8px; color: #93c5fd; font-weight: 600;">${groundDisplayName}</td>
+              <td style="padding: 8px; color: #fca5a5;">${b.reason}</td>
+              <td style="padding: 8px; color: var(--text-muted);">${bannedUntilStr}</td>
+              <td style="padding: 8px;">
+                ${isResolved 
+                  ? '<span class="status-pill status-online">🟢 Снят / Амнистирован</span>' 
+                  : '<span class="status-pill status-offline">🔴 Заблокирован</span>'}
+              </td>
+              <td style="padding: 8px; text-align: right;">
+                ${!isResolved || user.is_banned
+                  ? `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unbanUserByAdmin('${user.id}')">🔓 Снять бан</button>`
+                  : '<span style="font-size: 11px; color: var(--text-muted);">--</span>'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading bans:', err);
+        tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: #f87171;">Ошибка получения данных о банах</td></tr>';
+      }
+    }
+
+    async function unbanUserByAdmin(userId) {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/unban`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadAdminBans();
+          await loadAdminUsersList();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    let currentUsersSubTab = 'new'; // 'new' | 'all'
+    let cachedAdminUsers = [];
+
+    function switchUsersSubTab(tab) {
+      currentUsersSubTab = tab;
+      const newBtn = document.getElementById('userTabNewBtn');
+      const allBtn = document.getElementById('userTabAllBtn');
+      if (newBtn && allBtn) {
+        if (tab === 'new') {
+          newBtn.classList.add('active');
+          allBtn.classList.remove('active');
+        } else {
+          allBtn.classList.add('active');
+          newBtn.classList.remove('active');
+        }
+      }
+      renderAdminUsersTable();
+    }
+
+    async function loadAdminUsersList() {
+      const tableBody = document.getElementById('adminUsersTableBody');
+      if (!tableBody) return;
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users`);
+        const data = await res.json();
+        if (!data.success || !data.data) {
+          tableBody.innerHTML = '<tr><td colspan="5" style="padding: 12px; color: #f87171;">Ошибка загрузки пользователей</td></tr>';
+          return;
+        }
+
+        cachedAdminUsers = data.data;
+
+        // Update counts
+        const now = Date.now();
+        const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+        const newUsers = cachedAdminUsers.filter(u => {
+          const createdAt = u.created_at || u.createdAt;
+          return createdAt && new Date(createdAt).getTime() >= twentyFourHoursAgo;
+        });
+
+        const newBadge = document.getElementById('newUsersCountBadge');
+        const allBadge = document.getElementById('allUsersCountBadge');
+        if (newBadge) newBadge.innerText = newUsers.length;
+        if (allBadge) allBadge.innerText = cachedAdminUsers.length;
+
+        renderAdminUsersTable();
+      } catch (err) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="padding: 12px; color: #f87171;">Ошибка подключения</td></tr>';
+      }
+    }
+
+    function renderAdminUsersTable() {
+      const tableBody = document.getElementById('adminUsersTableBody');
+      if (!tableBody) return;
+
+      const now = Date.now();
+      const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+      let filteredUsers = cachedAdminUsers;
+      if (currentUsersSubTab === 'new') {
+        filteredUsers = cachedAdminUsers.filter(u => {
+          const createdAt = u.created_at || u.createdAt;
+          return createdAt && new Date(createdAt).getTime() >= twentyFourHoursAgo;
+        });
+      }
+
+      if (filteredUsers.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5" style="padding: 16px; text-align: center; color: var(--text-muted);">
+          ${currentUsersSubTab === 'new' ? 'Новых регистраций за последние 24 часа не найдено 📭' : 'Пользователи не найдены'}
+        </td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = filteredUsers.map(u => {
+        const isBanned = u.is_banned;
+        const bannedUntilStr = u.banned_until ? new Date(u.banned_until).toLocaleString('ru-RU') : '';
+        const createdAtStr = (u.created_at || u.createdAt) ? new Date(u.created_at || u.createdAt).toLocaleString('ru-RU') : '--';
+        const isNew = (u.created_at || u.createdAt) && new Date(u.created_at || u.createdAt).getTime() >= twentyFourHoursAgo;
+        const shortId = u.id ? (u.id.length > 8 ? u.id.substring(0, 8) + '...' : u.id) : '--';
+        const safeName = (u.full_name || 'Без имени').replace(/'/g, "\\'");
+
+        return `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 8px; font-family: monospace; color: #94a3b8; font-size: 11px;" title="${u.id}">
+              ${shortId}
+            </td>
+            <td style="padding: 8px;">
+              <div style="font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                <span>${u.full_name || 'Без имени'}</span>
+                ${isNew ? '<span style="font-size: 10px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(52,211,153,0.3); padding: 1px 6px; border-radius: 10px; font-weight: 700;">NEW</span>' : ''}
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Тел: ${u.phone_number || '--'} | ИИН: ${u.iin || '--'}
+              </div>
+            </td>
+            <td style="padding: 8px; color: #e2e8f0; font-size: 11px; font-weight: 500;">
+              📅 ${createdAtStr}
+            </td>
+            <td style="padding: 8px;">
+              <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                ${u.role === 'admin' ? '<span class="system-badge">Admin</span>' : '<span style="font-size: 11px; color: var(--text-muted);">Игрок</span>'}
+                ${isBanned 
+                  ? `<span class="status-pill status-offline" style="font-size: 10px;">🔴 Заблокирован до ${bannedUntilStr}</span>` 
+                  : '<span class="status-pill status-online" style="font-size: 10px;">🟢 Активен</span>'}
+              </div>
+            </td>
+            <td style="padding: 8px; text-align: right;">
+              ${isBanned 
+                ? `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unbanUserByAdmin('${u.id}')">🔓 Снять бан</button>`
+                : `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="openBanUserModal('${u.id}', '${safeName}')">⛔ Забанить</button>`}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openBanUserModal(userId, userName) {
+      document.getElementById('banTargetUserId').value = userId;
+      document.getElementById('banTargetUserNameDisplay').innerText = `Пользователь: ${userName}`;
+      selectBanDuration('24h');
+
+      const groundSelect = document.getElementById('banTargetGroundSelect');
+      if (groundSelect && window.allGroundsData) {
+        groundSelect.innerHTML = '<option value="">🌐 Все площадки</option>' + window.allGroundsData.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      }
+
+      toggleBanUserModal(true);
+    }
+
+    function toggleBanUserModal(show) {
+      const modal = document.getElementById('banUserModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    function selectBanDuration(duration) {
+      document.getElementById('banSelectedDuration').value = duration;
+      const ids = ['24h', '7d', '30d', 'PERMANENT'];
+      ids.forEach(d => {
+        const btn = document.getElementById(`banDur${d}`);
+        if (btn) {
+          if (d === duration) {
+            btn.style.background = 'rgba(239, 68, 68, 0.25)';
+            btn.style.borderColor = '#ef4444';
+            btn.style.color = '#fff';
+          } else {
+            btn.style.background = 'rgba(255, 255, 255, 0.06)';
+            btn.style.borderColor = 'var(--card-border)';
+            btn.style.color = 'var(--text-muted)';
+          }
+        }
+      });
+    }
+
+    async function submitBanUser() {
+      const userId = document.getElementById('banTargetUserId').value;
+      const duration = document.getElementById('banSelectedDuration').value;
+      const courtId = document.getElementById('banTargetGroundSelect').value;
+      const reason = document.getElementById('banReasonInput').value.trim();
+
+      if (!userId) return;
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/ban`, {
+          method: 'POST',
+          body: JSON.stringify({ duration, courtId, reason })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          toggleBanUserModal(false);
+          await loadAdminUsersList();
+          await loadAdminBans();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка выдачи бана: ' + err.message, 'error');
+      }
+    }
+
+    async function unbanSelfAdmin() {
+      if (!currentUserId) {
+        showAlert('Не найден активный ID пользователя', 'error');
+        return;
+      }
+      await unbanUserByAdmin(currentUserId);
+    }
+
+    function toggleEditGroundModal(show) {
+      const modal = document.getElementById('editGroundModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    async function submitUpdateGround() {
+      const id = document.getElementById('editGroundId').value;
+      const name = document.getElementById('editGroundName').value.trim();
+      const address = document.getElementById('editGroundAddress').value.trim();
+      const type = document.getElementById('editGroundType').value;
+      const pricePerHour = document.getElementById('editGroundCost').value;
+      const latitude = document.getElementById('editGroundLat').value;
+      const longitude = document.getElementById('editGroundLon').value;
+      const allowed_radius_meters = document.getElementById('editGroundRadius').value;
+      const isSchoolCourt = document.getElementById('editGroundIsSchool').checked;
+      const schoolHoursStart = document.getElementById('editGroundSchoolStart').value.trim();
+      const schoolHoursEnd = document.getElementById('editGroundSchoolEnd').value.trim();
+      const schoolDays = document.getElementById('editGroundSchoolDays').value;
+
+      if (!id || !name || !address) {
+        showAlert('Заполните название и адрес площадки', 'error');
+        return;
+      }
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/grounds/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, address, type, pricePerHour, latitude, longitude, allowed_radius_meters, isSchoolCourt, schoolHoursStart, schoolHoursEnd, schoolDays })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Площадка "${name}" успешно обновлена!`, 'success');
+          toggleEditGroundModal(false);
+          await loadGrounds();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+          if (typeof loadAkimatDashboard === 'function') await loadAkimatDashboard();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка обновления площадки: ' + err.message, 'error');
+      }
+    }
+
+    let akimatChartInstance = null;
+
+    async function loadAkimatDashboard() {
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/analytics/akimat`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        const d = data.data;
+        document.getElementById('akimatKpiCitizens').innerText = d.kpi.totalCitizensCount.toLocaleString() + ' чел.';
+        document.getElementById('akimatKpiOccupancy').innerText = d.kpi.occupancyPercentage + '%';
+        document.getElementById('akimatKpiMatches').innerText = d.kpi.totalMatchesCount + ' матчей';
+        document.getElementById('akimatKpiSavings').innerText = (d.kpi.budgetSavingsTenge / 1000000).toFixed(2) + ' млн ₸';
+
+        renderAkimatChart(d.hourlyProfile);
+      } catch (err) {
+        console.error('Error loading Akimat dashboard:', err);
+      }
+    }
+
+    function renderAkimatChart(hourlyData) {
+      const ctx = document.getElementById('akimatHourlyChart');
+      if (!ctx) return;
+
+      if (akimatChartInstance) {
+        akimatChartInstance.destroy();
+      }
+
+      const labels = hourlyData.map(h => h.hour);
+      const values = hourlyData.map(h => h.occupancyPercentage);
+      const bgColors = hourlyData.map(h => h.isSchoolHours ? 'rgba(239, 68, 68, 0.7)' : 'rgba(16, 185, 129, 0.75)');
+      const borderColors = hourlyData.map(h => h.isSchoolHours ? '#ef4444' : '#10b981');
+
+      akimatChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Загрузка площадки (%)',
+            data: values,
+            backgroundColor: bgColors,
+            borderColor: borderColors,
+            borderWidth: 2,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const item = hourlyData[context.dataIndex];
+                  return item.isSchoolHours 
+                    ? '🏫 100% Уроки физкультуры (Школа)' 
+                    : `⚽ Любительская загрузка горожанами: ${context.parsed.y}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: 'rgba(255, 255, 255, 0.06)' },
+              ticks: { color: '#9ca3af', callback: v => v + '%' }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#9ca3af' }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadOpenMatchmakingFeed() {
+      const container = document.getElementById('matchmakingFeedList');
+      if (!container) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/open-matchmaking`);
+        const data = await res.json();
+
+        if (!data.success || !data.data || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Сейчас нет активных объявлений по поиску игроков. Начните поиск в своем слоте!</div>';
+          return;
+        }
+
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+
+        container.innerHTML = data.data.map(b => {
+          const totalParticipants = 1 + (b.guests ? b.guests.length : 0);
+          const isHost = b.host_user_id === currentUserId;
+          const isGuest = b.guests && b.guests.some(g => g.user_id === currentUserId);
+          const myRequest = b.joinRequests && b.joinRequests.find(r => currentActiveUser && r.user_iin === currentActiveUser.iin);
+
+          let actionBtn = '';
+          if (isHost) {
+            actionBtn = '<span class="system-badge">👑 Вы организатор</span>';
+          } else if (isGuest) {
+            actionBtn = '<span class="status-pill status-online">✅ Вы в игре</span>';
+          } else if (myRequest) {
+            actionBtn = `<span class="status-pill ${myRequest.status === 'APPROVED' ? 'status-online' : 'status-offline'}">${myRequest.status === 'APPROVED' ? '🎉 Заявка одобрена!' : '⏳ Заявка отправлена'}</span>`;
+          } else {
+            actionBtn = `<button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="quickRespondMatchmaking('${b.id}')">⚡ Быстрый отклик</button>`;
+          }
+
+          return `
+            <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.25); padding: 14px; border-radius: 12px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 700; font-size: 14px; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <span>${b.ground.name}</span>
+                    <span class="tag tag-${b.ground.type}">${b.ground.type}</span>
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    📅 ${b.booking_date} (${b.start_time} - ${b.end_time}) | 👤 Организатор: <b>${b.host_user?.full_name || 'Хозяин'}</b>
+                  </div>
+                  <div style="display: flex; gap: 8px; margin-top: 6px; font-size: 11px;">
+                    <span style="background: rgba(245, 158, 11, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 6px; font-weight: 700;">🔥 Ищем ${b.needed_players_count} чел.</span>
+                    ${b.auto_approve_players ? '<span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 3px 8px; border-radius: 6px; font-weight: 700;">⚡ 1-Click Авто-прием</span>' : '<span style="background: rgba(255,255,255,0.06); color: var(--text-muted); padding: 3px 8px; border-radius: 6px;">⏳ Ручное подтверждение</span>'}
+                    <span style="color: #a7f3d0; padding: 3px 0;">👥 Занято: ${totalParticipants}/15</span>
+                  </div>
+                </div>
+                <div>${actionBtn}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки ленты Matchmaking</div>';
+      }
+    }
+
+    function toggleAutoApproveCheck(bookingId) {
+      const isLooking = document.getElementById(`mmLooking_${bookingId}`).checked;
+      const autoCheck = document.getElementById(`mmAuto_${bookingId}`);
+      if (autoCheck) {
+        autoCheck.disabled = !isLooking;
+        if (!isLooking) autoCheck.checked = false;
+      }
+    }
+
+    async function saveMatchmakingSettings(bookingId) {
+      const isLookingForPlayers = document.getElementById(`mmLooking_${bookingId}`).checked;
+      const neededPlayersCount = document.getElementById(`mmNeeded_${bookingId}`).value;
+      const autoApprovePlayers = document.getElementById(`mmAuto_${bookingId}`).checked;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/matchmaking-settings`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify({ isLookingForPlayers, neededPlayersCount, autoApprovePlayers })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert('Настройки поиска игроков сохранены!', 'success');
+          await loadOccupiedSlots();
+          await loadOpenMatchmakingFeed();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сохранения настроек: ' + err.message, 'error');
+      }
+    }
+
+    async function quickRespondMatchmaking(bookingId) {
+      try {
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+        const bodyObj = {
+          user_name: currentActiveUser?.name || 'Участник',
+          user_phone: currentActiveUser?.phone || activePhone,
+          user_iin: currentActiveUser?.iin || ''
+        };
+
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/request-join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadOpenMatchmakingFeed();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка при отклике на матч: ' + err.message, 'error');
+      }
+    }
+  </script>
+
+  <!-- Modal for registering new user -->
+  <div id="registerUserModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 460px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">➕ Регистрация нового игрока</h3>
+        <button onclick="toggleRegisterModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>ФИО игрока</label>
+        <input type="text" id="modalRegFullName" placeholder="Например: Аскар Ермеков" value="Аскар Ермеков">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>ИИН РК (12 цифр)</label>
+        <input type="text" id="modalRegIin" placeholder="Например: 980315350221" value="980315350221" oninput="validateModalIin()">
+        <div id="modalIinStatus" style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">Введите 12 цифр ИИН...</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Номер телефона РК</label>
+        <input type="text" id="modalRegPhone" placeholder="+77071112233" value="+77071112233">
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 8px;">
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="modalRegPassword" placeholder="Буквы + цифры" value="Pass123" oninput="liveValidateModalPass()">
+        </div>
+        <div class="form-group">
+          <label>Подтверждение</label>
+          <input type="password" id="modalRegConfirmPassword" placeholder="Повторите" value="Pass123" oninput="liveValidateModalPass()">
+        </div>
+      </div>
+
+      <div id="modalPassStatus" style="margin-bottom: 16px;"></div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitModalUserRegistration()" style="flex: 1;">Зарегистрировать & Авторизовать</button>
+        <button class="btn btn-secondary" onclick="toggleRegisterModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for editing existing venue/ground -->
+  <div id="editGroundModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 480px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">✏️ Редактирование площадки</h3>
+        <button onclick="toggleEditGroundModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <input type="hidden" id="editGroundId">
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Название площадки</label>
+        <input type="text" id="editGroundName">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Адрес</label>
+        <input type="text" id="editGroundAddress">
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 10px;">
+        <div class="form-group">
+          <label>Вид спорта</label>
+          <select id="editGroundType">
+            <option value="football">⚽ Футбол</option>
+            <option value="basketball">🏀 Баскетбол</option>
+            <option value="volleyball">🏐 Волейбол</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Стоимость в час (₸, 0 = бесплатно)</label>
+          <input type="number" id="editGroundCost" min="0" placeholder="0">
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 10px;">
+        <div class="form-group">
+          <label>Широта (Latitude)</label>
+          <input type="text" id="editGroundLat">
+        </div>
+        <div class="form-group">
+          <label>Долгота (Longitude)</label>
+          <input type="text" id="editGroundLon">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Допустимый радиус GPS (в метрах)</label>
+        <input type="number" id="editGroundRadius" value="50">
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 12px; border-radius: 10px; margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #fff;">
+          <input type="checkbox" id="editGroundIsSchool" style="width: 18px; height: 18px; accent-color: var(--accent-primary);">
+          🏫 Школьный объект (Приоритет уроков физкультуры)
+        </label>
+        <div class="form-group" style="margin-top: 10px; margin-bottom: 8px;">
+          <label style="font-size: 11px;">Дни школьных занятий (уроки физкультуры)</label>
+          <select id="editGroundSchoolDays" style="font-size: 12px; padding: 6px;">
+            <option value="MON_FRI">📅 Пн – Пт (5-дневка)</option>
+            <option value="MON_SAT">📅 Пн – Сб (6-дневка)</option>
+            <option value="ALL">🌐 Все дни (7 дней в неделю)</option>
+            <option value="NONE">🎉 Каникулы (Свободно все дни / Без уроков)</option>
+          </select>
+        </div>
+        <div class="grid-2">
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px;">Начало школьного времени</label>
+            <input type="text" id="editGroundSchoolStart" value="08:00">
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px;">Конец школьного времени</label>
+            <input type="text" id="editGroundSchoolEnd" value="15:00">
+          </div>
+        </div>
+      </div>
+
+      <!-- Venue-Specific Active Bans Section inside Edit Modal -->
+      <div style="background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); padding: 12px; border-radius: 10px; margin-bottom: 16px;">
+        <div style="font-weight: 700; font-size: 12px; color: #fca5a5; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+          <span>🔒 Текущие баны на этой площадке</span>
+          <span style="font-size: 11px; color: var(--text-muted);" id="editGroundBansCount">0 банов</span>
+        </div>
+        <div id="editGroundBansList" style="max-height: 120px; overflow-y: auto; font-size: 11px; color: var(--text-muted);">
+          Загрузка нарушений...
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitUpdateGround()" style="flex: 1;">💾 Сохранить изменения</button>
+        <button class="btn btn-secondary" onclick="toggleEditGroundModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for manually banning user with flexible duration -->
+  <div id="banUserModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 460px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">⛔ Заблокировать пользователя</h3>
+        <button onclick="toggleBanUserModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <input type="hidden" id="banTargetUserId">
+      <input type="hidden" id="banSelectedDuration" value="24h">
+
+      <div style="margin-bottom: 14px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; font-size: 13px; color: #fff;" id="banTargetUserNameDisplay">
+        Пользователь: --
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Срок блокировки</label>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;">
+          <button type="button" class="btn ban-duration-btn active" id="banDur24h" style="padding: 8px; font-size: 12px; background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #fff;" onclick="selectBanDuration('24h')">⏱️ 24 часа</button>
+          <button type="button" class="btn ban-duration-btn" id="banDur7d" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('7d')">📅 7 дней</button>
+          <button type="button" class="btn ban-duration-btn" id="banDur30d" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('30d')">📆 30 дней</button>
+          <button type="button" class="btn ban-duration-btn" id="banDurPERMANENT" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('PERMANENT')">⛔ Навсегда</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Привязать к площадке (Опционально)</label>
+        <select id="banTargetGroundSelect" style="font-size: 12px; padding: 8px;">
+          <option value="">🌐 Все площадки</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Причина блокировки</label>
+        <input type="text" id="banReasonInput" placeholder="Например: Нарушение правил / Неоплата" value="Заблокирован администратором">
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="submitBanUser()">⛔ Подтвердить блокировку</button>
+        <button class="btn btn-secondary" onclick="toggleBanUserModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

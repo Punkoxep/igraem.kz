@@ -69,20 +69,34 @@ export const App: React.FC = () => {
   // Requests state (clean empty array by default, loaded from API)
   const [myRequests, setMyRequests] = useState<MyRequestItem[]>([]);
   const [incomingVenueRequests, setIncomingVenueRequests] = useState<VenueIncomingRequests[]>([]);
+  const [requestsSubTab, setRequestsSubTab] = useState<'my' | 'incoming'>('incoming');
 
-  // Geolocation lookup on mount
+  // Handle direct URL routing and Push notification links (e.g. /requests?tab=incoming)
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        (err) => {
-          console.warn('[Geolocation Auto] Location permission or signal unavailable:', err);
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }
+    const handleUrlRouting = () => {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const pathname = url.pathname.toLowerCase();
+      const tabParam = url.searchParams.get('tab');
+      const filterParam = url.searchParams.get('filter');
+
+      if (pathname.includes('/requests') || tabParam === 'incoming' || tabParam === 'my' || filterParam === 'incoming') {
+        setActiveTab('requests');
+        if (tabParam === 'incoming' || filterParam === 'incoming' || pathname.includes('/requests')) {
+          setRequestsSubTab(tabParam === 'my' ? 'my' : 'incoming');
+        }
+      } else if (pathname.includes('/bookings')) {
+        setActiveTab('bookings');
+      } else if (pathname.includes('/favorites')) {
+        setActiveTab('favorites');
+      } else if (pathname.includes('/profile')) {
+        setActiveTab('profile');
+      }
+    };
+
+    handleUrlRouting();
+    window.addEventListener('popstate', handleUrlRouting);
+    return () => window.removeEventListener('popstate', handleUrlRouting);
   }, []);
 
   // Fetch grounds from API
@@ -740,6 +754,7 @@ export const App: React.FC = () => {
               onAcceptIncomingRequest={handleAcceptIncomingRequest}
               onDeclineIncomingRequest={handleDeclineIncomingRequest}
               currentLang={currentLang}
+              initialSubTab={requestsSubTab}
             />
           </div>
         )}

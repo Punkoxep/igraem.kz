@@ -18,7 +18,7 @@ self.addEventListener('push', function(event) {
     };
   }
 
-  const targetUrl = (data.data && data.data.url) || data.url || '/requests';
+  const targetUrl = (data.data && data.data.url) || data.url || '/requests?tab=incoming';
 
   const options = {
     body: data.body || 'Новое уведомление от IGRAEM.KZ',
@@ -52,19 +52,22 @@ self.addEventListener('notificationclick', function(event) {
   }
 
   const notificationData = event.notification.data || {};
-  const targetUrl = notificationData.url || '/requests';
+  const targetUrl = (notificationData && notificationData.url) ? notificationData.url : '/requests?tab=incoming';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      for (let i = 0; i < clientList.length; i++) {
-        let client = clientList[i];
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
+      // Если вкладка уже открыта — фокусируемся и переходим на нужный URL
+      for (let i = 0; i < windowClients.length; i++) {
+        let client = windowClients[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          if ('navigate' in client) {
-            client.navigate(targetUrl);
-          }
-          return client.focus();
+          return client.focus().then(function(focusedClient) {
+            if (focusedClient && 'navigate' in focusedClient) {
+              return focusedClient.navigate(targetUrl);
+            }
+          });
         }
       }
+      // Если приложение было полностью закрыто — открываем новую вкладку сразу на странице запросов
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

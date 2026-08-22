@@ -10,6 +10,7 @@ interface RequestsTabProps {
   onAcceptIncomingRequest: (venueId: string, requestId: string) => void;
   onDeclineIncomingRequest: (venueId: string, requestId: string) => void;
   currentLang: Language;
+  initialSubTab?: 'my' | 'incoming';
 }
 
 export const RequestsTab: React.FC<RequestsTabProps> = ({
@@ -18,9 +19,36 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
   onAcceptIncomingRequest,
   onDeclineIncomingRequest,
   currentLang,
+  initialSubTab,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'my' | 'incoming'>('my');
+  const getInitialSubTab = (): 'my' | 'incoming' => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      const filter = params.get('filter');
+      if (tab === 'incoming' || filter === 'incoming') return 'incoming';
+      if (tab === 'my' || filter === 'my') return 'my';
+    }
+    return initialSubTab || 'incoming';
+  };
+
+  const [activeSubTab, setActiveSubTab] = useState<'my' | 'incoming'>(getInitialSubTab);
   const [selectedVenueForRequests, setSelectedVenueForRequests] = useState<VenueIncomingRequests | null>(null);
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    } else if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      const filter = params.get('filter');
+      if (tab === 'incoming' || filter === 'incoming') {
+        setActiveSubTab('incoming');
+      } else if (tab === 'my' || filter === 'my') {
+        setActiveSubTab('my');
+      }
+    }
+  }, [initialSubTab]);
 
   const t = translations[currentLang];
 

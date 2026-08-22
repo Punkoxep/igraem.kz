@@ -196,7 +196,7 @@ export class NotificationService {
       const body = `${requesterName} просит присоединиться к вашей брони на ${groundName}`;
       const icon = '/icons/icon-192x192.png';
       const badge = '/icons/badge-72x72.png';
-      const vibrate = [300, 100, 300, 100, 300];
+      const vibrate = [200, 100, 200];
       const payload = {
         title,
         body,
@@ -205,7 +205,7 @@ export class NotificationService {
         vibrate,
         silent: false,
         requireInteraction: true,
-        data: { url: '/requests', bookingId },
+        data: { url: '/requests?tab=incoming', bookingId },
       };
 
       const subscriptionsToSend: any[] = [];

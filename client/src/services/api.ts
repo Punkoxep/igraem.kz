@@ -189,6 +189,10 @@ class ApiService {
     return this.request('/bookings/my');
   }
 
+  public async getMyActiveBookings(): Promise<{ success: boolean; data: any[] }> {
+    return this.request('/bookings/my-active');
+  }
+
   public async cancelBooking(bookingId: string): Promise<{ success: boolean; message?: string }> {
     return this.request(`/bookings/${bookingId}/cancel`, {
       method: 'POST',
@@ -197,6 +201,12 @@ class ApiService {
 
   public async completeBooking(bookingId: string): Promise<{ success: boolean; message?: string }> {
     return this.request(`/bookings/${bookingId}/complete`, {
+      method: 'POST',
+    });
+  }
+
+  public async leaveBooking(bookingId: string): Promise<{ success: boolean; message?: string; data?: any }> {
+    return this.request(`/bookings/${bookingId}/leave`, {
       method: 'POST',
     });
   }

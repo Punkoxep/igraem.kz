@@ -57,11 +57,13 @@ router.get('/bookings/open-matchmaking', BookingsController.getOpenMatchmakingBo
 router.post('/bookings', authenticateJwt, BookingsController.createBooking as any);
 router.patch('/bookings/:id/matchmaking-settings', authenticateJwt, BookingsController.updateMatchmakingSettings as any);
 router.get('/bookings/my', authenticateJwt, BookingsController.getMyBookings as any);
+router.get('/bookings/my-active', authenticateJwt, BookingsController.getMyActiveBookings as any);
 router.post('/bookings/:id/cancel', authenticateJwt, BookingsController.cancelBooking as any);
 router.delete('/bookings/:id', authenticateJwt, BookingsController.cancelBooking as any);
 router.post('/bookings/:id/extend', authenticateJwt, BookingsController.extendBooking as any);
 router.post('/bookings/:id/complete', authenticateJwt, BookingsController.completeBooking as any);
 router.post('/bookings/:id/finish', authenticateJwt, BookingsController.completeBooking as any);
+router.post('/bookings/:id/leave', authenticateJwt, BookingsController.leaveBooking as any);
 router.delete('/bookings/:bookingId/guests/:guestId', authenticateJwt, BookingsController.removeGuest as any);
 router.post('/bookings/:id/invite-link', authenticateJwt, BookingsController.getInviteLink as any);
 router.get('/invitations/:token', BookingsController.getInvitationByToken as any);

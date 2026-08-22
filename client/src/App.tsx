@@ -21,7 +21,7 @@ import { CityName, SportType, Venue, TimeSlot, Booking, ActiveTab, MyRequestItem
 import { INITIAL_VENUES } from './data/venuesData';
 import { Language } from './i18n/translations';
 import { api, UserProfile } from './services/api';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Auth & Ban state
@@ -29,9 +29,9 @@ export const App: React.FC = () => {
   const [isBanned, setIsBanned] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userPhone, setUserPhone] = useState('');
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
@@ -532,26 +532,42 @@ export const App: React.FC = () => {
     }
   };
 
-  // Finish/Complete active booking with real backend request
+  // Finish/Complete active booking (Host) or Leave session (Participant) with real backend request
   const handleFinishBooking = async (bookingId: string) => {
-    const foundBooking = bookings.find((b) => b.id === bookingId);
+    const foundBooking = bookings.find((b) => b.id === bookingId) || openedVenueBooking;
+    const isParticipant = Boolean(foundBooking?.isParticipant);
+
     if (foundBooking) {
       setClosedVenueSport(foundBooking.sport);
     }
 
     try {
-      await api.completeBooking(bookingId);
+      if (isParticipant) {
+        await api.leaveBooking(bookingId);
+      } else {
+        await api.completeBooking(bookingId);
+      }
     } catch (err) {
-      console.warn('[App] completeBooking backend error:', err);
+      console.warn('[App] finish/leave booking backend error:', err);
     }
 
-    // Immediately mark as completed, clear opened screen & active state
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'completed', isOpened: false } : b))
-    );
-    setOpenedVenueBooking(null);
-    setActiveTab('map');
-    setIsVenueClosedModalOpen(true);
+    if (isParticipant) {
+      // Participant left: completely remove from active list, clear opened screen & state
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      setOpenedVenueBooking(null);
+      setCurrentBookingSuccess(null);
+      setActiveTab('map');
+      showToast('Вы вышли из совместной игры', 'info');
+    } else {
+      // Organizer finished: mark booking as completed, open venue closed modal
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: 'completed', isOpened: false } : b))
+      );
+      setOpenedVenueBooking(null);
+      setCurrentBookingSuccess(null);
+      setActiveTab('map');
+      setIsVenueClosedModalOpen(true);
+    }
 
     // Refresh data from DB
     await fetchMyBookings();
@@ -820,13 +836,17 @@ export const App: React.FC = () => {
             className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
               toastMessage.type === 'success'
                 ? 'bg-white/95 border-[#00B050]/40 text-slate-900 shadow-[#00B050]/10'
-                : 'bg-white/95 border-rose-400 text-slate-900 shadow-rose-500/10'
+                : toastMessage.type === 'error'
+                ? 'bg-white/95 border-rose-400 text-slate-900 shadow-rose-500/10'
+                : 'bg-white/95 border-sky-400 text-slate-900 shadow-sky-500/10'
             }`}
           >
             {toastMessage.type === 'success' ? (
               <CheckCircle2 className="w-5 h-5 text-[#00B050] shrink-0" />
-            ) : (
+            ) : toastMessage.type === 'error' ? (
               <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            ) : (
+              <Info className="w-5 h-5 text-sky-500 shrink-0" />
             )}
             <span className="text-xs font-bold leading-snug">{toastMessage.text}</span>
           </div>

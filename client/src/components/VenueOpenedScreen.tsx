@@ -534,13 +534,13 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
             </div>
           </button>
 
-          {/* Full-width Red Button: Завершить бронирование / Покинуть площадку */}
+          {/* Full-width Red Button: Завершить бронь / Покинуть площадку (Организатор) или Покинуть игру (Участник) */}
           <button
             type="button"
             onClick={() => setActiveModal('confirmFinish')}
             className="w-full bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold py-3.5 px-4 rounded-2xl text-xs flex items-center justify-center shadow-md shadow-rose-500/20 transition-all cursor-pointer active:scale-98 !mt-6"
           >
-            <span>{isParticipant ? 'Покинуть площадку' : 'Завершить бронирование'}</span>
+            <span>{isParticipant ? 'Покинуть игру' : 'Завершить бронь / Покинуть площадку'}</span>
           </button>
         </div>
       </div>
@@ -678,7 +678,7 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
         </div>
       )}
 
-      {/* Finish Booking Confirmation Modal */}
+      {/* Finish/Leave Booking Confirmation Modal */}
       {activeModal === 'confirmFinish' && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in"
@@ -688,14 +688,18 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
             className="w-full max-w-[380px] bg-white rounded-3xl p-6 shadow-2xl text-center space-y-4 animate-fade-in text-slate-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 text-amber-500 flex items-center justify-center">
-              <Check className="w-7 h-7" />
+            <div className={`w-14 h-14 mx-auto rounded-full ${isParticipant ? 'bg-amber-50 text-amber-500' : 'bg-rose-50 text-rose-500'} flex items-center justify-center`}>
+              {isParticipant ? <Users className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                {isParticipant ? 'Хотите покинуть площадку?' : 'Завершить бронирование?'}
+                {isParticipant ? 'Покинуть совместную игру?' : 'Завершить бронирование?'}
               </h3>
-              <p className="text-xs text-slate-500 mt-1">Доступ к площадке будет закрыт.</p>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                {isParticipant
+                  ? 'Вы уверены, что хотите выйти из совместной игры? Доступ к площадке будет закрыт для вас.'
+                  : 'Вы уверены, что хотите завершить сеанс? Доступ к площадке будет закрыт для всех участников игры.'}
+              </p>
             </div>
             <div className="flex gap-2">
               <button
@@ -708,7 +712,7 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
               <button
                 type="button"
                 onClick={handleCompleteBooking}
-                className="w-1/2 bg-[#00B050] hover:bg-[#009644] text-white font-bold py-3 rounded-2xl text-xs transition-all cursor-pointer"
+                className={`w-1/2 ${isParticipant ? 'bg-amber-600 hover:bg-amber-700' : 'bg-rose-600 hover:bg-rose-700'} text-white font-bold py-3 rounded-2xl text-xs transition-all cursor-pointer shadow-md`}
               >
                 {isParticipant ? 'Да, покинуть' : 'Да, завершить'}
               </button>

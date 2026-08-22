@@ -287,6 +287,7 @@ export class BookingsController {
         include: {
           ground: true,
           guests: {
+            where: { status: 'approved' },
             include: {
               user: { select: { id: true, full_name: true, phone_number: true } },
             },
@@ -298,7 +299,7 @@ export class BookingsController {
       const joinedGuestSlots = await prisma.bookingGuest.findMany({
         where: {
           user_id: req.user.id,
-          status: 'approved',
+          status: 'approved', // Exclude 'left' or 'cancelled'
           booking: {
             status: { notIn: ['cancelled', 'CANCELLED'] },
           },
@@ -309,6 +310,7 @@ export class BookingsController {
               ground: true,
               host_user: { select: { id: true, full_name: true, phone_number: true } },
               guests: {
+                where: { status: 'approved' },
                 include: { user: { select: { id: true, full_name: true } } },
               },
             },
@@ -323,7 +325,7 @@ export class BookingsController {
         is_participant: false,
         isHost: true,
         is_host: true,
-        participantsCount: 1 + b.guests.filter((g) => g.status === 'approved').length,
+        participantsCount: 1 + b.guests.length,
       }));
 
       const joinedFormatted = joinedGuestSlots
@@ -335,7 +337,7 @@ export class BookingsController {
           isHost: false,
           is_host: false,
           guestId: g.id,
-          participantsCount: 1 + g.booking.guests.filter((guest) => guest.status === 'approved').length,
+          participantsCount: 1 + g.booking.guests.length,
         }));
 
       return res.json({
@@ -351,32 +353,231 @@ export class BookingsController {
   }
 
   /**
-   * Complete an active booking (Host marks game as completed)
+   * GET /api/v1/bookings/my-active
+   * Get list of active ongoing/upcoming bookings for current user (excludes left games)
+   */
+  public static async getMyActiveBookings(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const hostedBookings = await prisma.booking.findMany({
+        where: {
+          host_user_id: req.user.id,
+          status: 'confirmed',
+        },
+        include: {
+          ground: true,
+          guests: {
+            where: { status: 'approved' },
+            include: {
+              user: { select: { id: true, full_name: true, phone_number: true } },
+            },
+          },
+        },
+        orderBy: { booking_date: 'desc' },
+      });
+
+      const joinedGuestSlots = await prisma.bookingGuest.findMany({
+        where: {
+          user_id: req.user.id,
+          status: 'approved', // Strictly exclude 'left'
+          booking: {
+            status: 'confirmed',
+          },
+        },
+        include: {
+          booking: {
+            include: {
+              ground: true,
+              host_user: { select: { id: true, full_name: true, phone_number: true } },
+              guests: {
+                where: { status: 'approved' },
+                include: { user: { select: { id: true, full_name: true } } },
+              },
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      const hostedFormatted = hostedBookings.map((b) => ({
+        ...b,
+        isParticipant: false,
+        is_participant: false,
+        isHost: true,
+        is_host: true,
+        participantsCount: 1 + b.guests.length,
+      }));
+
+      const joinedFormatted = joinedGuestSlots
+        .filter((g) => g.booking && g.status === 'approved')
+        .map((g) => ({
+          ...g.booking,
+          isParticipant: true,
+          is_participant: true,
+          isHost: false,
+          is_host: false,
+          guestId: g.id,
+          participantsCount: 1 + g.booking.guests.length,
+        }));
+
+      return res.json({
+        success: true,
+        data: [...hostedFormatted, ...joinedFormatted],
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.getMyActiveBookings]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Participant leaves a shared booking session (status: 'left')
+   * POST /api/v1/bookings/:id/leave
+   */
+  public static async leaveBooking(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params;
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: { guests: true },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      // If user is host, delegate to completeBooking
+      if (booking.host_user_id === req.user.id || req.user.role === 'admin') {
+        const updated = await prisma.booking.update({
+          where: { id },
+          data: { status: 'completed' },
+        });
+        return res.json({
+          success: true,
+          isHost: true,
+          message: 'Бронирование успешно завершено организатором',
+          data: updated,
+        });
+      }
+
+      // Guest / Participant leaving logic:
+      const guest = await prisma.bookingGuest.findUnique({
+        where: {
+          booking_id_user_id: {
+            booking_id: id,
+            user_id: req.user.id,
+          },
+        },
+      });
+
+      if (guest) {
+        await prisma.bookingGuest.update({
+          where: { id: guest.id },
+          data: { status: 'left' },
+        });
+      }
+
+      // Revoke any JoinRequest for this user
+      await prisma.joinRequest.updateMany({
+        where: {
+          booking_id: id,
+          OR: [
+            { user_iin: req.user.iin },
+            { user_phone: req.user.phone_number },
+          ],
+        },
+        data: { status: 'LEFT' },
+      });
+
+      return res.json({
+        success: true,
+        isParticipant: true,
+        message: 'Вы успешно вышли из совместной игры',
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.leaveBooking]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Complete an active booking (Host completes session, Participant leaves session)
+   * POST /api/v1/bookings/:id/complete
+   * POST /api/v1/bookings/:id/finish
    */
   public static async completeBooking(req: AuthenticatedRequest, res: Response) {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
       const { id } = req.params;
-      const booking = await prisma.booking.findUnique({ where: { id } });
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: { guests: true },
+      });
 
       if (!booking) {
         return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
       }
 
-      if (booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
-        return res.status(403).json({ success: false, message: 'Только хозяин бронирования или администратор может завершить сеанс' });
+      const isHost = booking.host_user_id === req.user.id || req.user.role === 'admin';
+
+      if (isHost) {
+        // Organizer: Complete the entire booking for everyone
+        const updated = await prisma.booking.update({
+          where: { id },
+          data: { status: 'completed' },
+        });
+
+        return res.json({
+          success: true,
+          isHost: true,
+          message: 'Бронирование успешно завершено',
+          data: updated,
+        });
       }
 
-      const updated = await prisma.booking.update({
-        where: { id },
-        data: { status: 'completed' },
+      // Participant: Mark status as 'left' without cancelling the main booking
+      const guest = await prisma.bookingGuest.findUnique({
+        where: {
+          booking_id_user_id: {
+            booking_id: id,
+            user_id: req.user.id,
+          },
+        },
+      });
+
+      if (!guest && !booking.guests.some((g) => g.user_id === req.user?.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Вы не являетесь участником этой брони',
+        });
+      }
+
+      if (guest) {
+        await prisma.bookingGuest.update({
+          where: { id: guest.id },
+          data: { status: 'left' },
+        });
+      }
+
+      await prisma.joinRequest.updateMany({
+        where: {
+          booking_id: id,
+          OR: [
+            { user_iin: req.user.iin },
+            { user_phone: req.user.phone_number },
+          ],
+        },
+        data: { status: 'LEFT' },
       });
 
       return res.json({
         success: true,
-        message: 'Бронирование успешно завершено',
-        data: updated,
+        isParticipant: true,
+        message: 'Вы успешно вышли из совместной игры',
       });
     } catch (error: any) {
       console.error('[BookingsController.completeBooking]', error);

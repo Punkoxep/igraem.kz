@@ -111,10 +111,18 @@ router.post('/join-requests/:id/reject', authenticateJwt, (req: any, res: any, n
 
 router.get('/bookings/requests', authenticateJwt, BookingsController.getHostIncomingRequests as any);
 router.post('/bookings/:id/request-join', authenticateJwt, BookingsController.requestJoinSlot as any);
+router.post('/bookings/:id/join-request', authenticateJwt, BookingsController.requestJoinSlot as any);
 router.get('/bookings/:id/requests', authenticateJwt, BookingsController.getBookingJoinRequests as any);
+router.get('/bookings/:id/join-requests', authenticateJwt, BookingsController.getBookingJoinRequests as any);
 router.post('/bookings/requests/:requestId/respond', authenticateJwt, BookingsController.respondJoinRequest as any);
-router.post('/bookings/:id/requests/:requestId/approve', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
 router.post('/bookings/requests/:requestId/approve', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/requests/:requestId/accept', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/requests/:requestId/reject', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'REJECTED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/join-requests/:requestId/accept', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/join-requests/:requestId/reject', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'REJECTED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/:id/requests/:requestId/approve', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/:id/join-requests/:requestId/accept', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/:id/join-requests/:requestId/reject', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'REJECTED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
 
 // --- Dynamic QR & Spontaneous Check-in ---
 router.post('/bookings/spontaneous-join', authenticateJwt, BookingsController.spontaneousQrCheckIn as any);

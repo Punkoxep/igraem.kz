@@ -948,8 +948,12 @@ export class BookingsController {
       const existingRequests = await prisma.joinRequest.findMany({
         where: {
           booking_id: currentActiveBooking.id,
-          user_iin: req.user.iin,
+          OR: [
+            { user_iin: req.user.iin },
+            { user_phone: req.user.phone_number },
+          ],
         },
+        orderBy: { created_at: 'desc' },
       });
 
       const activeReq = existingRequests.find((r) => r.status === 'PENDING' || r.status === 'APPROVED');
@@ -976,16 +980,34 @@ export class BookingsController {
         });
       }
 
-      // Create JoinRequest with status PENDING for host review (DO NOT add to BookingGuest yet)
-      const joinRequest = await prisma.joinRequest.create({
-        data: {
-          booking_id: currentActiveBooking.id,
-          user_iin: req.user.iin,
-          user_name: req.user.full_name,
-          user_phone: req.user.phone_number,
-          status: 'PENDING',
-        },
-      });
+      let joinRequest;
+      if (existingRequests.length > 0) {
+        const first = existingRequests[0];
+        if (existingRequests.length > 1) {
+          await prisma.joinRequest.deleteMany({
+            where: { id: { in: existingRequests.slice(1).map((r) => r.id) } },
+          });
+        }
+        joinRequest = await prisma.joinRequest.update({
+          where: { id: first.id },
+          data: {
+            status: 'PENDING',
+            user_name: req.user.full_name,
+            user_phone: req.user.phone_number,
+            created_at: new Date(),
+          },
+        });
+      } else {
+        joinRequest = await prisma.joinRequest.create({
+          data: {
+            booking_id: currentActiveBooking.id,
+            user_iin: req.user.iin,
+            user_name: req.user.full_name,
+            user_phone: req.user.phone_number,
+            status: 'PENDING',
+          },
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -1270,23 +1292,39 @@ export class BookingsController {
         });
       }
 
-      // Check if user is already a guest
+      // Check if user is already an active guest
       const isAlreadyGuest = booking.guests.some((g) => g.user_id === req.user?.id && g.status === 'approved');
       if (isAlreadyGuest) {
         return res.status(400).json({ success: false, message: 'Вы уже являетесь участником этой игры' });
       }
 
-      // Check if user already submitted a request
-      const existingRequest = booking.joinRequests.find(
-        (r) => r.user_iin === applicantIin && (r.status === 'PENDING' || r.status === 'APPROVED')
-      );
+      // Check existing join requests for this user on this booking
+      const existingRequests = await prisma.joinRequest.findMany({
+        where: {
+          booking_id: booking.id,
+          OR: [
+            { user_iin: applicantIin },
+            { user_phone: applicantPhone },
+          ],
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      const existingRequest = existingRequests[0];
       if (existingRequest) {
-        return res.status(400).json({
-          success: false,
-          message: existingRequest.status === 'APPROVED' 
-            ? 'Ваша заявка на присоединение уже одобрена' 
-            : 'Вы уже отправили заявку на присоединение. Ожидайте ответа хозяина.',
-        });
+        const s = (existingRequest.status || '').toUpperCase();
+        if (s === 'PENDING') {
+          return res.status(400).json({
+            success: false,
+            message: 'Запрос уже отправлен на рассмотрение',
+          });
+        }
+        if (s === 'APPROVED' && isAlreadyGuest) {
+          return res.status(400).json({
+            success: false,
+            message: 'Вы уже являетесь участником этой игры',
+          });
+        }
       }
 
       // Check if user has an overlapping active booking or team game
@@ -1308,26 +1346,62 @@ export class BookingsController {
       const isAutoApprove = booking.is_looking_for_players && booking.auto_approve_players && booking.needed_players_count > 0;
       const initialStatus = isAutoApprove ? 'APPROVED' : 'PENDING';
 
-      const joinRequest = await prisma.joinRequest.create({
-        data: {
-          booking_id: booking.id,
-          user_iin: applicantIin,
-          user_name: applicantName,
-          user_phone: applicantPhone,
-          status: initialStatus,
-        },
-      });
+      let joinRequest;
+      if (existingRequest) {
+        if (existingRequests.length > 1) {
+          await prisma.joinRequest.deleteMany({
+            where: { id: { in: existingRequests.slice(1).map((r) => r.id) } },
+          });
+        }
+        joinRequest = await prisma.joinRequest.update({
+          where: { id: existingRequest.id },
+          data: {
+            status: initialStatus,
+            user_name: applicantName,
+            user_phone: applicantPhone,
+            user_iin: applicantIin,
+            created_at: new Date(),
+          },
+        });
+      } else {
+        joinRequest = await prisma.joinRequest.create({
+          data: {
+            booking_id: booking.id,
+            user_iin: applicantIin,
+            user_name: applicantName,
+            user_phone: applicantPhone,
+            status: initialStatus,
+          },
+        });
+      }
 
       if (isAutoApprove) {
         // Add applicant as an approved guest to BookingGuest granting door access
-        await prisma.bookingGuest.create({
-          data: {
-            booking_id: booking.id,
-            user_id: req.user.id,
-            type: 'invited',
-            status: 'approved',
+        const existingGuest = await prisma.bookingGuest.findUnique({
+          where: {
+            booking_id_user_id: {
+              booking_id: booking.id,
+              user_id: req.user.id,
+            },
           },
         });
+
+        if (existingGuest) {
+          await prisma.bookingGuest.update({
+            where: { id: existingGuest.id },
+            data: { status: 'approved', checked_in_at: new Date() },
+          });
+        } else {
+          await prisma.bookingGuest.create({
+            data: {
+              booking_id: booking.id,
+              user_id: req.user.id,
+              type: 'invited',
+              status: 'approved',
+              checked_in_at: new Date(),
+            },
+          });
+        }
 
         // Decrement needed_players_count by 1
         const newNeededCount = Math.max(0, booking.needed_players_count - 1);
@@ -1441,7 +1515,7 @@ export class BookingsController {
   }
 
   /**
-   * Get all join requests for a booking slot
+   * Get all join requests for a booking slot (de-duplicated per user)
    */
   public static async getBookingJoinRequests(req: AuthenticatedRequest, res: Response) {
     try {
@@ -1466,9 +1540,19 @@ export class BookingsController {
         orderBy: { created_at: 'desc' },
       });
 
+      const seenUsers = new Set<string>();
+      const uniqueRequests: any[] = [];
+      for (const r of requests) {
+        const userKey = r.user_iin || r.user_phone || r.id;
+        if (!seenUsers.has(userKey)) {
+          seenUsers.add(userKey);
+          uniqueRequests.push(r);
+        }
+      }
+
       return res.json({
         success: true,
-        data: requests,
+        data: uniqueRequests,
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
@@ -1478,7 +1562,7 @@ export class BookingsController {
   /**
    * GET /api/v1/join-requests/incoming
    * GET /api/v1/bookings/requests
-   * Get all incoming join requests for bookings hosted by current user
+   * Get all incoming join requests for bookings hosted by current user (de-duplicated per user)
    */
   public static async getHostIncomingRequests(req: AuthenticatedRequest, res: Response) {
     try {
@@ -1503,24 +1587,37 @@ export class BookingsController {
 
       const data = hostedBookings
         .filter((b) => b.joinRequests.length > 0)
-        .map((b) => ({
-          id: b.id,
-          venueId: b.ground_id,
-          venueTitle: b.ground.name,
-          sport: (b.ground.type || 'football').toLowerCase(),
-          address: b.ground.address,
-          date: b.booking_date,
-          timeSlot: `${b.start_time} – ${b.end_time}`,
-          joinedCount: 1 + b.guests.filter((g) => g.status === 'approved').length,
-          requests: b.joinRequests.map((r) => ({
-            id: r.id,
-            userName: r.user_name || 'Пользователь',
-            userPhone: r.user_phone || '',
-            userIin: r.user_iin || '',
-            status: r.status === 'APPROVED' ? 'accepted' : r.status === 'REJECTED' ? 'declined' : 'pending',
-            createdAt: r.created_at,
-          })),
-        }));
+        .map((b) => {
+          // De-duplicate join requests per user, keeping the latest request
+          const seenUsers = new Set<string>();
+          const uniqueRequests: any[] = [];
+          for (const r of b.joinRequests) {
+            const userKey = r.user_iin || r.user_phone || r.id;
+            if (!seenUsers.has(userKey)) {
+              seenUsers.add(userKey);
+              uniqueRequests.push({
+                id: r.id,
+                userName: r.user_name || 'Пользователь',
+                userPhone: r.user_phone || '',
+                userIin: r.user_iin || '',
+                status: r.status === 'APPROVED' ? 'accepted' : r.status === 'REJECTED' ? 'declined' : r.status === 'LEFT' ? 'left' : 'pending',
+                createdAt: r.created_at,
+              });
+            }
+          }
+
+          return {
+            id: b.id,
+            venueId: b.ground_id,
+            venueTitle: b.ground.name,
+            sport: (b.ground.type || 'football').toLowerCase(),
+            address: b.ground.address,
+            date: b.booking_date,
+            timeSlot: `${b.start_time} – ${b.end_time}`,
+            joinedCount: 1 + b.guests.filter((g) => g.status === 'approved').length,
+            requests: uniqueRequests,
+          };
+        });
 
       return res.json({
         success: true,
@@ -1534,7 +1631,7 @@ export class BookingsController {
 
   /**
    * GET /api/v1/join-requests/my
-   * Get all outgoing join requests created by current user
+   * Get all outgoing join requests created by current user (de-duplicated per booking)
    */
   public static async getMyJoinRequests(req: AuthenticatedRequest, res: Response) {
     try {
@@ -1562,7 +1659,17 @@ export class BookingsController {
         orderBy: { created_at: 'desc' },
       });
 
-      const mapped = requests.map((r) => {
+      const seenBookings = new Set<string>();
+      const uniqueRequests: any[] = [];
+      for (const r of requests) {
+        if (!r.booking) continue;
+        if (!seenBookings.has(r.booking_id)) {
+          seenBookings.add(r.booking_id);
+          uniqueRequests.push(r);
+        }
+      }
+
+      const mapped = uniqueRequests.map((r) => {
         let status: 'pending' | 'confirmed' | 'declined' = 'pending';
         if (r.status === 'APPROVED') status = 'confirmed';
         else if (r.status === 'REJECTED') status = 'declined';
@@ -1579,7 +1686,7 @@ export class BookingsController {
           status,
           hostName: r.booking.host_user?.full_name || 'Организатор',
           hostPhone: r.booking.host_user?.phone_number || '',
-          participantsCount: 1 + (r.booking.guests ? r.booking.guests.filter((g) => g.status === 'approved').length : 0),
+          participantsCount: 1 + (r.booking.guests ? r.booking.guests.filter((g: any) => g.status === 'approved').length : 0),
           createdAt: r.created_at,
         };
       });
@@ -1601,7 +1708,7 @@ export class BookingsController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { requestId } = req.params;
+      const requestId = req.params.requestId || req.params.id;
       const { status } = req.body; // 'APPROVED' | 'REJECTED'
 
       if (!status || !['APPROVED', 'REJECTED'].includes(status)) {
@@ -1666,7 +1773,7 @@ export class BookingsController {
         data: { status },
       });
 
-      // If approved, automatically add applicant as an approved guest to BookingGuest
+      // If approved, automatically add or reactivate applicant as an approved guest in BookingGuest
       if (status === 'APPROVED') {
         const fullRequest = await prisma.joinRequest.findUnique({
           where: { id: requestId },
@@ -1693,13 +1800,22 @@ export class BookingsController {
               },
             });
 
-            if (!existingGuest) {
+            if (existingGuest) {
+              await prisma.bookingGuest.update({
+                where: { id: existingGuest.id },
+                data: {
+                  status: 'approved',
+                  checked_in_at: new Date(),
+                },
+              });
+            } else {
               await prisma.bookingGuest.create({
                 data: {
                   booking_id: fullRequest.booking_id,
                   user_id: applicantUser.id,
                   type: 'invited',
                   status: 'approved',
+                  checked_in_at: new Date(),
                 },
               });
             }

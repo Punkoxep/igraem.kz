@@ -48,6 +48,9 @@ class ApiService {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
       ...(options.headers as Record<string, string>),
     };
 
@@ -57,6 +60,7 @@ class ApiService {
 
     const response = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers,
     });
 
@@ -218,7 +222,7 @@ class ApiService {
   }
 
   public async getGroundBookings(groundId: string, date: string): Promise<{ success: boolean; data: any[] }> {
-    return this.request(`/bookings/occupied?groundId=${encodeURIComponent(groundId)}&date=${encodeURIComponent(date)}`, {
+    return this.request(`/bookings/occupied?groundId=${encodeURIComponent(groundId)}&date=${encodeURIComponent(date)}&_t=${Date.now()}`, {
       method: 'GET',
     });
   }

@@ -277,6 +277,10 @@ export class BookingsController {
    */
   public static async getMyBookings(req: AuthenticatedRequest, res: Response) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
       const hostedBookings = await prisma.booking.findMany({
@@ -358,6 +362,9 @@ export class BookingsController {
    */
   public static async getMyActiveBookings(req: AuthenticatedRequest, res: Response) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
       const hostedBookings = await prisma.booking.findMany({
@@ -1025,6 +1032,10 @@ export class BookingsController {
    */
   public static async getAllBookings(req: Request, res: Response) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       const { groundId, ground_id, date, booking_date } = req.query;
       const targetGroundId = (groundId || ground_id) as string;
       const rawDate = (date || booking_date) as string;
@@ -1116,6 +1127,10 @@ export class BookingsController {
    */
   public static async getOccupiedSlots(req: Request, res: Response) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       const groundId = (req.params.id || req.query.groundId || req.query.ground_id) as string;
       const rawDate = (req.query.date || req.query.booking_date) as string;
 

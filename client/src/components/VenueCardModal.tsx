@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Heart, Check, Star, AlertCircle } from 'lucide-react';
 import { Venue, TimeSlot, Booking } from '../types';
 import { calculateDistanceMeters, formatDistance } from '../utils/geo';
@@ -87,24 +87,52 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
 
   const activeDay = upcomingDays[selectedDateIdx] || upcomingDays[0];
 
-  // Fetch real active bookings from backend for selected ground and date
-  useEffect(() => {
-    if (venue && venue.id) {
-      api
-        .getGroundBookings(venue.id, activeDay.isoDateStr)
-        .then((res) => {
-          if (res && res.success && Array.isArray(res.data)) {
-            setGroundBookings(res.data);
-          } else {
-            setGroundBookings([]);
-          }
-        })
-        .catch((err) => {
-          console.warn('[VenueCardModal] Error loading ground bookings:', err);
-          setGroundBookings([]);
-        });
+  // Dedicated real-time fetch function with anti-caching
+  const fetchGroundBookings = useCallback(async () => {
+    if (!venue || !venue.id) return;
+    try {
+      const res = await api.getGroundBookings(venue.id, activeDay.isoDateStr);
+      if (res && res.success && Array.isArray(res.data)) {
+        setGroundBookings(res.data);
+      } else {
+        setGroundBookings([]);
+      }
+    } catch (err) {
+      console.warn('[VenueCardModal] Error loading ground bookings:', err);
+      setGroundBookings([]);
     }
-  }, [venue, activeDay.isoDateStr]);
+  }, [venue?.id, activeDay.isoDateStr]);
+
+  // 1. Fetch real-time active bookings immediately on mount / venue change / date change
+  useEffect(() => {
+    fetchGroundBookings();
+  }, [fetchGroundBookings]);
+
+  // 2. Real-time background polling (every 10s) and window focus / visibility refetch
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchGroundBookings();
+    }, 10000);
+
+    const onFocus = () => {
+      fetchGroundBookings();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGroundBookings();
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [fetchGroundBookings]);
 
   // Reset selected slots on date change
   useEffect(() => {
@@ -335,6 +363,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
             const res = await api.createJoinRequest(targetBookingId);
             if (res.success) {
               setIsJoinSuccessModalOpen(true);
+              fetchGroundBookings();
             } else {
               setSlotWarningMsg(res.message || 'Не удалось отправить заявку');
             }

@@ -108,5 +108,6 @@ export interface VenueIncomingRequests {
   date: string;
   timeSlot: string;
   joinedCount?: number;
+  pendingRequestsCount?: number;
   requests: IncomingUserRequest[];
 }

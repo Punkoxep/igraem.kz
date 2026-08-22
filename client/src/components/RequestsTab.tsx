@@ -34,6 +34,7 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
   const [activeSubTab, setActiveSubTab] = useState<'my' | 'incoming'>(getInitialSubTab);
   const [selectedVenueForRequests, setSelectedVenueForRequests] = useState<VenueIncomingRequests | null>(null);
+  const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(new Set());
 
   const handleSubTabClick = (tab: 'my' | 'incoming') => {
     setActiveSubTab(tab);
@@ -139,17 +140,43 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
                       <>
                         <button
                           type="button"
-                          onClick={() => onDeclineIncomingRequest(currentVenueData.id, req.id)}
-                          className="text-red-500 hover:text-red-600 font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                          disabled={processingRequestIds.has(req.id)}
+                          onClick={async () => {
+                            if (processingRequestIds.has(req.id)) return;
+                            setProcessingRequestIds((prev) => new Set(prev).add(req.id));
+                            try {
+                              await onDeclineIncomingRequest(currentVenueData.id, req.id);
+                            } finally {
+                              setProcessingRequestIds((prev) => {
+                                const next = new Set(prev);
+                                next.delete(req.id);
+                                return next;
+                              });
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-600 font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          Отклонить
+                          {processingRequestIds.has(req.id) ? '...' : 'Отклонить'}
                         </button>
                         <button
                           type="button"
-                          onClick={() => onAcceptIncomingRequest(currentVenueData.id, req.id)}
-                          className="text-[#00B050] hover:text-[#009040] font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                          disabled={processingRequestIds.has(req.id)}
+                          onClick={async () => {
+                            if (processingRequestIds.has(req.id)) return;
+                            setProcessingRequestIds((prev) => new Set(prev).add(req.id));
+                            try {
+                              await onAcceptIncomingRequest(currentVenueData.id, req.id);
+                            } finally {
+                              setProcessingRequestIds((prev) => {
+                                const next = new Set(prev);
+                                next.delete(req.id);
+                                return next;
+                              });
+                            }
+                          }}
+                          className="text-[#00B050] hover:text-[#009040] font-bold text-xs px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          Принять
+                          {processingRequestIds.has(req.id) ? '...' : 'Принять'}
                         </button>
                       </>
                     )}

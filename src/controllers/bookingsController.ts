@@ -1584,17 +1584,29 @@ export class BookingsController {
       }
 
       const requests = await prisma.joinRequest.findMany({
-        where: { booking_id: id },
+        where: {
+          booking_id: id,
+          status: { in: ['PENDING', 'pending'] },
+        },
         orderBy: { created_at: 'desc' },
       });
 
       const seenUsers = new Set<string>();
       const uniqueRequests: any[] = [];
       for (const r of requests) {
+        if ((r.status || '').toUpperCase() !== 'PENDING') continue;
         const userKey = r.user_iin || r.user_phone || r.id;
         if (!seenUsers.has(userKey)) {
           seenUsers.add(userKey);
-          uniqueRequests.push(r);
+          uniqueRequests.push({
+            id: r.id,
+            bookingId: r.booking_id,
+            userName: r.user_name || 'Пользователь',
+            userPhone: r.user_phone || '',
+            userIin: r.user_iin || '',
+            status: 'pending',
+            createdAt: r.created_at,
+          });
         }
       }
 
@@ -1753,6 +1765,9 @@ export class BookingsController {
             include: { user: { select: { id: true, full_name: true, phone_number: true } } },
           },
           joinRequests: {
+            where: {
+              status: { in: ['PENDING', 'pending'] },
+            },
             orderBy: { created_at: 'desc' },
           },
         },
@@ -1778,21 +1793,25 @@ export class BookingsController {
           const seenUsers = new Set<string>();
           const uniqueRequests: any[] = [];
           for (const r of b.joinRequests) {
+            const rawStatus = (r.status || '').toUpperCase();
+            if (rawStatus !== 'PENDING') continue;
+
             const userKey = r.user_iin || r.user_phone || r.id;
             if (!seenUsers.has(userKey)) {
               seenUsers.add(userKey);
               uniqueRequests.push({
                 id: r.id,
+                bookingId: r.booking_id,
                 userName: r.user_name || 'Пользователь',
                 userPhone: r.user_phone || '',
                 userIin: r.user_iin || '',
-                status: r.status === 'APPROVED' ? 'accepted' : r.status === 'REJECTED' ? 'declined' : r.status === 'LEFT' ? 'left' : 'pending',
+                status: 'pending',
                 createdAt: r.created_at,
               });
             }
           }
 
-          const pendingCount = uniqueRequests.filter((r) => r.status === 'pending').length;
+          const pendingCount = uniqueRequests.length;
 
           let normalizedDate = b.booking_date;
           if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
@@ -1822,7 +1841,7 @@ export class BookingsController {
             requests: uniqueRequests,
           };
         })
-        .filter((b) => b.requests.length > 0);
+        .filter((b) => b.requests.length > 0 && b.pendingRequestsCount > 0);
 
       // Sort:
       // 1. Slots with pendingRequestsCount > 0 come FIRST (descending)
@@ -1943,7 +1962,17 @@ export class BookingsController {
       });
 
       if (!joinRequest) {
-        return res.status(404).json({ success: false, message: 'Заявка не найдена' });
+        return res.status(404).json({ success: false, isOutdated: true, message: 'Заявка более не актуальна' });
+      }
+
+      // STRICT VALIDATION: Request must be in PENDING status
+      const currentStatus = (joinRequest.status || '').toUpperCase();
+      if (currentStatus !== 'PENDING') {
+        return res.status(409).json({
+          success: false,
+          isOutdated: true,
+          message: 'Заявка более не актуальна',
+        });
       }
 
       if (joinRequest.booking.host_user_id !== req.user.id && req.user.role !== 'admin') {

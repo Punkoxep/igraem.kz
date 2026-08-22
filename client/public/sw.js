@@ -1,57 +1,57 @@
 // Service Worker for igraem.kz Web Push Notifications
-self.addEventListener('install', (event) => {
+self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', function(event) {
   event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('push', function(event) {
-  let data = {};
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      data = { body: event.data.text() };
-    }
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (e) {
+    payload = {
+      title: 'IGRAEM.KZ ⚽',
+      body: event.data ? event.data.text() : 'Новый входящий запрос!'
+    };
   }
 
-  const title = data.title || 'IGRAEM.KZ ⚽';
   const options = {
-    body: data.body || 'Новое уведомление',
-    icon: data.icon || '/icons/icon-192x192.png',
-    badge: data.badge || '/icons/badge-72x72.png',
-    vibrate: data.vibrate || [200, 100, 200],
+    body: payload.body || 'Новый входящий запрос!',
+    icon: payload.icon || '/icons/icon-192x192.png',
+    badge: payload.badge || '/icons/badge-72x72.png',
+    vibrate: payload.vibrate || [300, 100, 300, 100, 300], // ощутимый вибро-шаблон
     silent: false,
-    data: data.data || { url: data.url || '/requests' },
+    requireInteraction: true, // не гасить пока пользователь не увидит
+    data: payload.data || { url: payload.url || '/requests' },
     actions: [
-      { action: 'open', title: 'Открыть в приложении' }
+      { action: 'open', title: 'Открыть запрос' }
     ]
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Новый запрос на игру! ⚽', options)
+  );
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const urlToOpen = (event.notification.data && event.notification.data.url) || '/requests';
-
+  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/requests';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // If a window tab is already open, focus it and navigate
-      for (let i = 0; i < windowClients.length; i++) {
-        const client = windowClients[i];
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (let i = 0; i < clientList.length; i++) {
+        let client = clientList[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           if ('navigate' in client) {
-            client.navigate(urlToOpen);
+            client.navigate(targetUrl);
           }
           return client.focus();
         }
       }
-      // Otherwise open a new window
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(targetUrl);
       }
     })
   );

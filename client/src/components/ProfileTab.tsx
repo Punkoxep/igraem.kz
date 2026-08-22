@@ -395,56 +395,77 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
         </div>
       </div>
 
-      {/* BLOCK 3: Уведомления */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl pt-4 px-4 pb-3 shadow-xs space-y-2">
-        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          {t.sectionNotifications}
-        </div>
-        <div className="py-1 flex items-center justify-between text-xs">
-          <div className="pr-4">
-            <span className="font-semibold text-slate-800 block">
-              Web Push уведомления
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium block pt-0.5">
-              Входящие запросы игроков и напоминания за 30 мин (звук + вибрация)
-            </span>
+      {/* BLOCK 3: Уведомления на смартфоне */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Уведомления на смартфоне
           </div>
-          <button
-            type="button"
-            disabled={isTogglingReminders}
-            onClick={handleToggleReminders}
-            className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center shrink-0 cursor-pointer ${
-              remindersEnabled ? 'bg-[#00B050] justify-end' : 'bg-slate-300 justify-start'
-            } ${isTogglingReminders ? 'opacity-50' : ''}`}
-          >
-            {isTogglingReminders ? (
-              <Loader2 className="w-4 h-4 text-white animate-spin mx-auto" />
-            ) : (
-              <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
-            )}
-          </button>
+          {remindersEnabled && (
+            <span className="text-[11px] font-bold text-[#00B050] bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+              Активны
+            </span>
+          )}
         </div>
 
-        {remindersEnabled && (
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 font-medium">
-              Проверка работы на устройстве:
-            </span>
+        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+          Получайте мгновенные уведомления о новых запросах игроков на ваши слоты и напоминания за 30 минут со звуком и вибрацией.
+        </p>
+
+        <div className="space-y-2 pt-1">
+          {!remindersEnabled ? (
             <button
               type="button"
-              disabled={isSendingTestPush}
-              onClick={handleSendTestPush}
-              className="text-xs font-bold text-[#00B050] hover:text-[#009040] bg-emerald-50 hover:bg-emerald-100/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+              disabled={isTogglingReminders}
+              onClick={handleToggleReminders}
+              className="w-full py-3 px-4 rounded-xl bg-[#00B050] hover:bg-[#009644] text-white text-xs font-bold transition-all active:scale-98 shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {isSendingTestPush ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
+              {isTogglingReminders ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Bell className="w-3 h-3" />
+                <Bell className="w-4 h-4 stroke-[2.2]" />
               )}
-              <span>Тест Push</span>
+              <span>Включить Push-уведомления (Звук + Вибрация)</span>
             </button>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={isSendingTestPush}
+                onClick={handleSendTestPush}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all active:scale-98 shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSendingTestPush ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span>🧪 Отправить тестовый Push на мой телефон</span>
+                )}
+              </button>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  disabled={isTogglingReminders}
+                  onClick={handleToggleReminders}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 font-medium underline cursor-pointer transition-colors"
+                >
+                  Отключить уведомления
+                </button>
+                <button
+                  type="button"
+                  disabled={isTogglingReminders}
+                  onClick={async () => {
+                    setRemindersEnabled(false);
+                    setTimeout(() => handleToggleReminders(), 100);
+                  }}
+                  className="text-[11px] text-[#00B050] hover:underline font-bold cursor-pointer transition-colors"
+                >
+                  Обновить токен подписки
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* BLOCK 4: Приложение */}

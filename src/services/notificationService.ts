@@ -115,13 +115,15 @@ export class NotificationService {
       badge?: string;
       vibrate?: number[];
       silent?: boolean;
+      requireInteraction?: boolean;
       data?: { url?: string; [key: string]: any };
       url?: string;
       [key: string]: any;
     }
   ) {
+    let subscription: any = null;
     try {
-      const subscription = typeof subscriptionRaw === 'string' ? JSON.parse(subscriptionRaw) : subscriptionRaw;
+      subscription = typeof subscriptionRaw === 'string' ? JSON.parse(subscriptionRaw) : subscriptionRaw;
       if (!subscription || !subscription.endpoint) {
         throw new Error('Некорректный объект PushSubscription');
       }
@@ -129,8 +131,9 @@ export class NotificationService {
       const stringifiedPayload = JSON.stringify({
         icon: payload.icon || '/icons/icon-192x192.png',
         badge: payload.badge || '/icons/badge-72x72.png',
-        vibrate: payload.vibrate || [200, 100, 200],
+        vibrate: payload.vibrate || [300, 100, 300, 100, 300],
         silent: payload.silent !== undefined ? payload.silent : false,
+        requireInteraction: payload.requireInteraction !== undefined ? payload.requireInteraction : true,
         data: payload.data || { url: payload.url || '/requests' },
         ...payload,
         title: payload.title || '⚽ Новое уведомление | igraem.kz',
@@ -140,7 +143,25 @@ export class NotificationService {
       const result = await webpush.sendNotification(subscription, stringifiedPayload);
       return { success: true, statusCode: result.statusCode };
     } catch (error: any) {
-      console.error('[NotificationService.sendPush] Push error:', error.message);
+      console.error('[PushNotification] Error sending to endpoint:', subscription?.endpoint || 'unknown', error.message || error);
+
+      // If subscription has expired or is unsubscribed (410 Gone / 404 Not Found), remove from DB
+      if (
+        subscription?.endpoint &&
+        (error.statusCode === 410 ||
+          error.statusCode === 404 ||
+          (error.message && (error.message.includes('410') || error.message.includes('404'))))
+      ) {
+        try {
+          console.log('[PushNotification] Subscription expired/gone (410/404). Deleting endpoint:', subscription.endpoint);
+          await (prisma as any).pushSubscription.deleteMany({
+            where: { endpoint: subscription.endpoint },
+          });
+        } catch (cleanupErr: any) {
+          console.warn('[PushNotification] Error cleaning up dead push subscription:', cleanupErr.message);
+        }
+      }
+
       return { success: false, error: error.message };
     }
   }
@@ -170,7 +191,7 @@ export class NotificationService {
       const body = `${requesterName} просит присоединиться к вашей брони на ${groundName}`;
       const icon = '/icons/icon-192x192.png';
       const badge = '/icons/badge-72x72.png';
-      const vibrate = [200, 100, 200];
+      const vibrate = [300, 100, 300, 100, 300];
       const payload = {
         title,
         body,
@@ -178,6 +199,7 @@ export class NotificationService {
         badge,
         vibrate,
         silent: false,
+        requireInteraction: true,
         data: { url: '/requests', bookingId },
       };
 
@@ -199,16 +221,16 @@ export class NotificationService {
         } catch (e) {}
       }
 
+      console.log(`[PushNotification] Sending push to userId: ${hostUserId} (${hostUser.full_name}). Found subscriptions: ${subscriptionsToSend.length}`);
+
       if (subscriptionsToSend.length === 0) {
-        console.log(`[NotificationService] Host ${hostUser.full_name} (${hostUserId}) has no push subscriptions registered.`);
+        console.log(`[PushNotification] Host ${hostUser.full_name} (${hostUserId}) has no active push subscriptions.`);
         return;
       }
 
       for (const sub of subscriptionsToSend) {
         await this.sendPush(sub, payload);
       }
-
-      console.log(`[NotificationService] Sent JoinRequest push to host ${hostUser.full_name} (${hostUserId})`);
     } catch (error: any) {
       console.error('[NotificationService.sendJoinRequestPushToHost] Error:', error.message);
     }
@@ -229,32 +251,40 @@ export class NotificationService {
 
     const hasSub = (user.pushSubscriptions && user.pushSubscriptions.length > 0) || !!user.push_subscription;
     if (!hasSub) {
-      throw new Error('Браузерная подписка на уведомления не найдена. Пожалуйста, включите тумблер напоминаний в профиле.');
+      throw new Error('Браузерная подписка на уведомления не найдена. Пожалуйста, включите Push-уведомления в профиле.');
     }
 
     const payload = {
-      title: '⚽ Тестовое уведомление | igraem.kz',
-      body: 'Web Push уведомления успешно настроены и работают на вашем устройстве!',
+      title: '⚽ Тестовый Push | IGRAEM.KZ',
+      body: 'Звук и вибрация работают отлично! Вы будете мгновенно получать запросы на игру.',
       icon: '/icons/icon-192x192.png',
       badge: '/icons/badge-72x72.png',
-      vibrate: [200, 100, 200],
+      vibrate: [300, 100, 300, 100, 300],
+      requireInteraction: true,
+      silent: false,
       data: { url: '/requests' },
     };
 
     let pushResult: any = { success: false };
 
+    const subs: any[] = [];
     if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
-      for (const sub of user.pushSubscriptions) {
-        pushResult = await this.sendPush(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          payload
-        );
+      for (const s of user.pushSubscriptions) {
+        subs.push({
+          endpoint: s.endpoint,
+          keys: { p256dh: s.p256dh, auth: s.auth },
+        });
       }
     } else if (user.push_subscription) {
-      pushResult = await this.sendPush(user.push_subscription, payload);
+      try {
+        subs.push(JSON.parse(user.push_subscription));
+      } catch (e) {}
+    }
+
+    console.log(`[PushNotification] Sending test push to userId: ${userId} (${user.full_name}). Found subscriptions: ${subs.length}`);
+
+    for (const sub of subs) {
+      pushResult = await this.sendPush(sub, payload);
     }
 
     return pushResult;

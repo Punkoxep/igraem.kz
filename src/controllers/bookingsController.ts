@@ -1581,12 +1581,19 @@ export class BookingsController {
    */
   public static async getHostIncomingRequests(req: AuthenticatedRequest, res: Response) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      // Find all bookings hosted by this user that have join requests
+      const { dateStr: currentDateStr, timeStr: currentTimeStr } = getLocalNow();
+
+      // Find all ACTIVE / CONFIRMED bookings hosted by this user that have join requests
       const hostedBookings = await prisma.booking.findMany({
         where: {
           host_user_id: req.user.id,
+          status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING'] },
         },
         include: {
           ground: true,
@@ -1597,11 +1604,23 @@ export class BookingsController {
             orderBy: { created_at: 'desc' },
           },
         },
-        orderBy: { booking_date: 'desc' },
+        orderBy: [{ booking_date: 'asc' }, { start_time: 'asc' }],
       });
 
-      const data = hostedBookings
-        .filter((b) => b.joinRequests.length > 0)
+      // Filter out completed or past sessions where end time has already passed
+      const activeFutureBookings = hostedBookings.filter((b) => {
+        let bDate = b.booking_date;
+        if (/^\d{2}\.\d{2}\.\d{4}$/.test(bDate)) {
+          const [d, m, y] = bDate.split('.');
+          bDate = `${y}-${m}-${d}`;
+        }
+        if (bDate < currentDateStr) return false;
+        if (bDate === currentDateStr && b.end_time <= currentTimeStr) return false;
+        return true;
+      });
+
+      const data = activeFutureBookings
+        .filter((b) => b.joinRequests && b.joinRequests.length > 0)
         .map((b) => {
           // De-duplicate join requests per user, keeping the latest request
           const seenUsers = new Set<string>();
@@ -1621,18 +1640,50 @@ export class BookingsController {
             }
           }
 
+          const pendingCount = uniqueRequests.filter((r) => r.status === 'pending').length;
+
+          let normalizedDate = b.booking_date;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+            const [y, m, d] = normalizedDate.split('-');
+            normalizedDate = `${d}.${m}.${y}`;
+          }
+
+          let isoDate = b.booking_date;
+          if (/^\d{2}\.\d{2}\.\d{4}$/.test(isoDate)) {
+            const [d, m, y] = isoDate.split('.');
+            isoDate = `${y}-${m}-${d}`;
+          }
+
           return {
             id: b.id,
             venueId: b.ground_id,
             venueTitle: b.ground.name,
             sport: (b.ground.type || 'football').toLowerCase(),
             address: b.ground.address,
-            date: b.booking_date,
+            date: normalizedDate,
+            rawDate: isoDate,
             timeSlot: `${b.start_time} – ${b.end_time}`,
+            startTime: b.start_time,
+            endTime: b.end_time,
             joinedCount: 1 + b.guests.filter((g) => g.status === 'approved').length,
+            pendingRequestsCount: pendingCount,
             requests: uniqueRequests,
           };
-        });
+        })
+        .filter((b) => b.requests.length > 0);
+
+      // Sort:
+      // 1. Slots with pendingRequestsCount > 0 come FIRST (descending)
+      // 2. Then by date and start_time ascending
+      data.sort((a, b) => {
+        if (b.pendingRequestsCount !== a.pendingRequestsCount) {
+          return b.pendingRequestsCount - a.pendingRequestsCount;
+        }
+        if (a.rawDate !== b.rawDate) {
+          return a.rawDate.localeCompare(b.rawDate);
+        }
+        return a.startTime.localeCompare(b.startTime);
+      });
 
       return res.json({
         success: true,

@@ -24,9 +24,17 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
   const t = translations[currentLang];
 
-  // Only show venues that have at least 1 request sent to them
+  // Only show venues that have at least 1 request sent to them, with pending requests at the very top
   const filteredIncomingVenueRequests = React.useMemo(() => {
-    return incomingVenueRequests.filter((v) => v.requests && v.requests.length > 0);
+    const list = incomingVenueRequests.filter((v) => v.requests && v.requests.length > 0);
+    return [...list].sort((a, b) => {
+      const aPending = (a.requests || []).filter((r) => r.status === 'pending').length;
+      const bPending = (b.requests || []).filter((r) => r.status === 'pending').length;
+      if (bPending !== aPending) {
+        return bPending - aPending;
+      }
+      return 0;
+    });
   }, [incomingVenueRequests]);
 
   // Helper for sport icon emoji

@@ -125,7 +125,7 @@ export class NotificationService {
     try {
       subscription = typeof subscriptionRaw === 'string' ? JSON.parse(subscriptionRaw) : subscriptionRaw;
       if (!subscription || !subscription.endpoint) {
-        throw new Error('Некорректный объект PushSubscription');
+        return { success: false, isExpired: true, error: 'Некорректный объект PushSubscription' };
       }
 
       const stringifiedPayload = JSON.stringify({
@@ -143,26 +143,31 @@ export class NotificationService {
       const result = await webpush.sendNotification(subscription, stringifiedPayload);
       return { success: true, statusCode: result.statusCode };
     } catch (error: any) {
-      console.error('[PushNotification] Error sending to endpoint:', subscription?.endpoint || 'unknown', error.message || error);
+      const isExpired =
+        error.statusCode === 410 ||
+        error.statusCode === 404 ||
+        error.statusCode === 400 ||
+        (error.message &&
+          (error.message.includes('410') ||
+            error.message.includes('404') ||
+            error.message.includes('NotRegistered') ||
+            error.message.includes('Gone') ||
+            error.message.includes('Received unexpected response code')));
 
-      // If subscription has expired or is unsubscribed (410 Gone / 404 Not Found), remove from DB
-      if (
-        subscription?.endpoint &&
-        (error.statusCode === 410 ||
-          error.statusCode === 404 ||
-          (error.message && (error.message.includes('410') || error.message.includes('404'))))
-      ) {
+      if (subscription?.endpoint && isExpired) {
         try {
-          console.log('[PushNotification] Subscription expired/gone (410/404). Deleting endpoint:', subscription.endpoint);
+          console.log('Expired push subscription removed:', subscription.endpoint);
           await (prisma as any).pushSubscription.deleteMany({
             where: { endpoint: subscription.endpoint },
           });
         } catch (cleanupErr: any) {
           console.warn('[PushNotification] Error cleaning up dead push subscription:', cleanupErr.message);
         }
+      } else {
+        console.error('[PushNotification] Error sending to endpoint:', subscription?.endpoint || 'unknown', error.message || error);
       }
 
-      return { success: false, error: error.message };
+      return { success: false, isExpired: Boolean(isExpired), error: error.message };
     }
   }
 
@@ -265,8 +270,6 @@ export class NotificationService {
       data: { url: '/requests' },
     };
 
-    let pushResult: any = { success: false };
-
     const subs: any[] = [];
     if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
       for (const s of user.pushSubscriptions) {
@@ -283,11 +286,32 @@ export class NotificationService {
 
     console.log(`[PushNotification] Sending test push to userId: ${userId} (${user.full_name}). Found subscriptions: ${subs.length}`);
 
+    let anySuccess = false;
+    let anyExpired = false;
+    let lastError = '';
+
     for (const sub of subs) {
-      pushResult = await this.sendPush(sub, payload);
+      const res = await this.sendPush(sub, payload);
+      if (res.success) {
+        anySuccess = true;
+      }
+      if (res.isExpired) {
+        anyExpired = true;
+      }
+      if (res.error) {
+        lastError = res.error;
+      }
     }
 
-    return pushResult;
+    if (anySuccess) {
+      return { success: true, message: 'Push успешно отправлен' };
+    }
+
+    return {
+      success: false,
+      isExpired: anyExpired || subs.length === 0,
+      error: lastError || 'Подписка устарела или недействительна',
+    };
   }
 
   /**

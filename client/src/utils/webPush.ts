@@ -24,9 +24,13 @@ export function isPushSupported(): boolean {
 }
 
 /**
- * Registers the Service Worker and requests a PushSubscription using the provided VAPID public key
+ * Registers the Service Worker and requests a PushSubscription using the provided VAPID public key.
+ * If forceRenew is true, it safely unsubscribes any stale subscription first.
  */
-export async function registerServiceWorkerAndSubscribe(vapidPublicKey: string): Promise<PushSubscription | null> {
+export async function registerServiceWorkerAndSubscribe(
+  vapidPublicKey: string,
+  forceRenew: boolean = false
+): Promise<PushSubscription | null> {
   if (!isPushSupported()) {
     throw new Error('Ваш браузер или устройство не поддерживает Web Push уведомления');
   }
@@ -34,23 +38,46 @@ export async function registerServiceWorkerAndSubscribe(vapidPublicKey: string):
   // 1. Request notification permission
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    throw new Error('Разрешение на отправку уведомлений было отклонено в браузере');
+    throw new Error('Разрешение на отправку уведомлений отклонено');
   }
 
-  // 2. Register Service Worker
+  // 2. Register Service Worker with root scope
   const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   await navigator.serviceWorker.ready;
 
   // 3. Check for existing subscription
   let subscription = await registration.pushManager.getSubscription();
 
-  // 4. If no subscription, create a new one with applicationServerKey
+  const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+  // If forceRenew or need fresh subscription with current VAPID key:
+  if (subscription && forceRenew) {
+    try {
+      await subscription.unsubscribe();
+      subscription = null;
+    } catch (e) {
+      console.warn('[WebPush] Error unsubscribing stale subscription:', e);
+    }
+  }
+
+  // 4. Create fresh subscription with current applicationServerKey
   if (!subscription) {
-    const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedVapidKey as any,
-    });
+    try {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey as any,
+      });
+    } catch (subscribeErr: any) {
+      console.warn('[WebPush] Initial subscribe failed, attempting clean re-subscribe:', subscribeErr.message);
+      const oldSub = await registration.pushManager.getSubscription();
+      if (oldSub) {
+        await oldSub.unsubscribe().catch(() => {});
+      }
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey as any,
+      });
+    }
   }
 
   return subscription;

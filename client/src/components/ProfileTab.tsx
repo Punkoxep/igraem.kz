@@ -151,8 +151,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           throw new Error('Не удалось получить ключ VAPID от сервера');
         }
 
-        // 2. Register Service Worker & subscribe
-        const subscription = await registerServiceWorkerAndSubscribe(publicKey);
+        // 2. Register Service Worker & subscribe (force fresh renewal)
+        const subscription = await registerServiceWorkerAndSubscribe(publicKey, true);
         if (!subscription) {
           throw new Error('Не удалось создать подписку Web Push');
         }
@@ -164,16 +164,19 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
         });
 
         setRemindersEnabled(true);
-        showToast('Напоминания о бронях за 30 минут успешно включены! ⚽', 'success');
+        showToast('Push-уведомления успешно подключены! 🔔', 'success');
       } else {
         // Turning OFF
         await api.toggleReminders(false);
         setRemindersEnabled(false);
-        showToast('Напоминания о бронях отключены', 'success');
+        showToast('Уведомления отключены', 'success');
       }
     } catch (err: any) {
-      console.error('[handleToggleReminders error]', err);
-      showToast(err.message || 'Ошибка настройки уведомлений', 'error');
+      console.warn('[handleToggleReminders]', err);
+      const friendlyMsg = err.message?.includes('отклонено')
+        ? 'Разрешите уведомления в настройках браузера'
+        : (err.message || 'Ошибка настройки уведомлений');
+      showToast(friendlyMsg, 'error');
     } finally {
       setIsTogglingReminders(false);
     }
@@ -189,10 +192,25 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       if (res && res.success) {
         showToast('Тестовое Web Push уведомление отправлено! 🔔', 'success');
       } else {
-        showToast(res.message || 'Не удалось отправить тестовое уведомление', 'error');
+        // If expired or failed, automatically re-subscribe in the background
+        const { publicKey } = await api.getVapidPublicKey();
+        if (publicKey) {
+          const freshSub = await registerServiceWorkerAndSubscribe(publicKey, true);
+          if (freshSub) {
+            await api.subscribePushNotifications({ subscription: freshSub, notify30min: true });
+            const retryRes = await api.sendTestPush();
+            if (retryRes && retryRes.success) {
+              showToast('Токен обновлен! Тестовый Push доставлен 🔔', 'success');
+              setRemindersEnabled(true);
+              return;
+            }
+          }
+        }
+        showToast('Проверьте разрешение на уведомления в настройках браузера', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Ошибка отправки тестового уведомления', 'error');
+      console.warn('[handleSendTestPush]', err);
+      showToast('Разрешите уведомления на устройстве для проверки', 'error');
     } finally {
       setIsSendingTestPush(false);
     }

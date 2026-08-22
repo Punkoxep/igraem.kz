@@ -105,9 +105,13 @@ export class NotificationsController {
       const result = await NotificationService.sendTestPush(req.user.id);
 
       if (!result.success) {
-        return res.status(400).json({
+        return res.json({
           success: false,
-          message: `Не удалось отправить Push-уведомление: ${result.error}`,
+          isExpired: result.isExpired ?? false,
+          message: result.isExpired
+            ? 'Подписка устарела. Выполняется автоматическое обновление...'
+            : (result.error || 'Не удалось отправить Push-уведомление'),
+          data: result,
         });
       }
 
@@ -117,7 +121,12 @@ export class NotificationsController {
         data: result,
       });
     } catch (error: any) {
-      return res.status(400).json({ success: false, message: error.message });
+      console.error('[NotificationsController.sendTestPush]', error.message || error);
+      return res.json({
+        success: false,
+        isExpired: true,
+        message: error.message || 'Ошибка отправки тестового уведомления',
+      });
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Unlock,
   ChevronLeft,
@@ -16,7 +16,7 @@ import {
   Clock,
   Loader2
 } from 'lucide-react';
-import { Booking } from '../types';
+import { Booking, ParticipantUser } from '../types';
 import { api } from '../services/api';
 
 interface VenueOpenedScreenProps {
@@ -215,21 +215,55 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
     return 'Следующий час свободен';
   }, [isClosingTime, isDailyLimitReached, isNextSlotOccupied]);
 
-  const initialGuests = useMemo(() => {
-    if (currentBooking.guests && currentBooking.guests.length > 0) {
-      return currentBooking.guests.map((g: any, idx: number) => ({
-        id: g.id || `g-${idx}`,
-        name: g.name || g.user?.full_name || `Игрок ${idx + 1}`,
-        iin: g.iin || g.user?.iin || '000000000000',
-        status: (g.status === 'approved' ? 'approved' : g.status === 'entered' ? 'entered' : 'pending') as 'approved' | 'pending' | 'entered',
-      }));
-    }
-    return [
-      { id: '1', name: 'Нурлан С.', iin: '950312301245', status: 'approved' as const },
-    ];
-  }, [currentBooking.guests]);
+  const [participantsData, setParticipantsData] = useState<{
+    organizer: ParticipantUser;
+    participants: ParticipantUser[];
+  }>(() => ({
+    organizer: {
+      id: currentBooking.host_user_id || 'host-1',
+      fullName: currentBooking.host_user?.full_name || currentBooking.hostName || (isHost ? 'Вы' : 'Организатор'),
+      phone: currentBooking.host_user?.phone_number || currentBooking.hostPhone || '',
+      avatar: (currentBooking.host_user as any)?.avatar_url || null,
+      isCurrentUser: isHost,
+    },
+    participants: (currentBooking.guests || []).map((g: any, idx: number) => ({
+      id: g.id || `g-${idx}`,
+      userId: g.user_id || g.user?.id,
+      fullName: g.user?.full_name || g.name || `Игрок ${idx + 1}`,
+      phone: g.user?.phone_number || '',
+      avatar: g.user?.avatar_url || null,
+      status: g.status || 'approved',
+      isCurrentUser: Boolean(isParticipant && (currentBooking.guestId === g.id || g.isCurrentUser)),
+    })),
+  }));
 
-  const [participantsList, setParticipantsList] = useState(initialGuests);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+
+  const fetchParticipants = useCallback(async () => {
+    if (!currentBooking.id) return;
+    setIsLoadingParticipants(true);
+    try {
+      const res = await api.getBookingParticipants(currentBooking.id);
+      if (res && res.success && res.data) {
+        setParticipantsData({
+          organizer: res.data.organizer || {
+            id: currentBooking.host_user_id || 'host-1',
+            fullName: currentBooking.host_user?.full_name || currentBooking.hostName || (isHost ? 'Вы' : 'Организатор'),
+            isCurrentUser: isHost,
+          },
+          participants: res.data.participants || [],
+        });
+      }
+    } catch (e) {
+      console.warn('[VenueOpenedScreen] fetchParticipants error:', e);
+    } finally {
+      setIsLoadingParticipants(false);
+    }
+  }, [currentBooking.id, currentBooking.host_user_id, currentBooking.host_user, currentBooking.hostName, isHost]);
+
+  useEffect(() => {
+    fetchParticipants();
+  }, [fetchParticipants]);
 
   const handleOpenDoorClick = async () => {
     if (!('geolocation' in navigator)) {
@@ -285,13 +319,17 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
   };
 
   const handleApproveParticipant = (id: string) => {
-    setParticipantsList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'approved' } : item))
-    );
+    setParticipantsData((prev) => ({
+      ...prev,
+      participants: prev.participants.map((item) => (item.id === id ? { ...item, status: 'approved' } : item)),
+    }));
   };
 
   const handleDeclineParticipant = (id: string) => {
-    setParticipantsList((prev) => prev.filter((item) => item.id !== id));
+    setParticipantsData((prev) => ({
+      ...prev,
+      participants: prev.participants.filter((item) => item.id !== id),
+    }));
   };
 
   const handleExtendBooking = async () => {
@@ -465,7 +503,10 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
           {/* Card: Участники */}
           <button
             type="button"
-            onClick={() => setActiveModal('players')}
+            onClick={() => {
+              fetchParticipants();
+              setActiveModal('players');
+            }}
             className="w-full bg-white border border-slate-200/80 hover:border-slate-300 rounded-2xl p-2.5 px-3.5 flex items-center gap-3 text-left shadow-xs transition-all active:scale-98 cursor-pointer"
           >
             <div className="w-8 h-8 rounded-xl bg-[#E8F8F0] text-[#00B050] flex items-center justify-center shrink-0">
@@ -476,9 +517,9 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
                 Участники
               </span>
               <span className="text-[11px] text-slate-400 font-medium truncate block">
-                {booking.guests && booking.guests.length > 0
-                  ? `Организатор + ${booking.guests.length} игроков`
-                  : 'Организатор и запросы на игру'}
+                {participantsData.participants.length > 0
+                  ? `Организатор + ${participantsData.participants.length} игроков`
+                  : 'Организатор (пока без игроков)'}
               </span>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -807,9 +848,9 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
 
       {/* Full Screen "Участники" View */}
       {activeModal === 'players' && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-in text-slate-900 w-full min-w-[360px]">
+        <div className="fixed inset-0 z-50 bg-[#F8FAFC] flex flex-col animate-fade-in text-slate-900 w-full min-w-[360px]">
           {/* Header Bar */}
-          <div className="bg-white px-4 pt-3.5 pb-3.5 border-b border-slate-100 flex items-center justify-between sticky top-0 z-10 w-full">
+          <div className="bg-white px-4 pt-3.5 pb-3.5 border-b border-slate-200/80 flex items-center justify-between sticky top-0 z-10 w-full shadow-xs">
             <button
               type="button"
               onClick={() => setActiveModal(null)}
@@ -823,49 +864,118 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
             </h2>
           </div>
 
-          {/* Participants List */}
-          <div className="flex-1 overflow-y-auto w-full bg-white pt-[8px]">
-            {participantsList.map((item) => (
-              <div
-                key={item.id}
-                className="py-3.5 px-4 flex items-center justify-between text-xs w-full min-h-[48px] border-b border-slate-100"
-              >
-                <span className="font-bold text-slate-900 text-xs leading-normal pr-4 flex-1">
-                  {item.name}
+          <div className="flex-1 overflow-y-auto w-full p-4 space-y-5">
+            {/* СЕКЦИЯ А: ОРГАНИЗАТОР */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Организатор
                 </span>
-
-                {item.status === 'pending' && (
-                  <div className="flex items-center gap-5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleDeclineParticipant(item.id)}
-                      className="text-[#EF4444] hover:text-red-600 font-bold text-xs active:scale-95 transition-all cursor-pointer leading-normal"
-                    >
-                      Отклонить
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleApproveParticipant(item.id)}
-                      className="text-[#00B050] hover:text-[#009040] font-bold text-xs active:scale-95 transition-all cursor-pointer leading-normal"
-                    >
-                      Принять
-                    </button>
-                  </div>
-                )}
-
-                {item.status === 'entered' && (
-                  <span className="text-slate-400 font-medium text-xs shrink-0 leading-normal flex items-center">
-                    Вошёл
-                  </span>
-                )}
-
-                {item.status === 'approved' && (
-                  <span className="text-[#00B050] font-bold text-xs shrink-0 leading-normal flex items-center">
-                    Одобрен
-                  </span>
-                )}
+                <span className="text-[11px] font-bold text-slate-400">
+                  1 чел.
+                </span>
               </div>
-            ))}
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 text-[#00B050] border border-emerald-200/60 flex items-center justify-center font-bold text-sm shrink-0">
+                    {participantsData.organizer.fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-900 text-sm truncate">
+                        {participantsData.organizer.fullName}
+                      </span>
+                      {participantsData.organizer.isCurrentUser && (
+                        <span className="text-xs font-bold text-[#00B050] shrink-0">
+                          (Вы)
+                        </span>
+                      )}
+                    </div>
+                    {participantsData.organizer.phone && (
+                      <span className="text-xs text-slate-400 font-medium block truncate">
+                        {participantsData.organizer.phone}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="shrink-0 ml-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#00B050] border border-emerald-200/60">
+                    Организатор
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* СЕКЦИЯ Б: ИГРОКИ (УЧАСТНИКИ) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Игроки
+                </span>
+                <span className="text-[11px] font-bold text-slate-400">
+                  {participantsData.participants.length} чел.
+                </span>
+              </div>
+
+              {isLoadingParticipants ? (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 flex items-center justify-center gap-2 text-slate-400 text-xs shadow-xs">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#00B050]" />
+                  <span>Загрузка списка игроков...</span>
+                </div>
+              ) : participantsData.participants.length === 0 ? (
+                <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-8 text-center space-y-2">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-slate-50 text-slate-400 flex items-center justify-center">
+                    <Users className="w-6 h-6 stroke-[1.8px]" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    Пока никто не присоединился
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Пригласите друзей или ожидайте заявок на игру
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {participantsData.participants.map((player) => (
+                    <div
+                      key={player.id}
+                      className="bg-white border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between shadow-xs transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm shrink-0">
+                          {player.fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900 text-sm truncate">
+                              {player.fullName}
+                            </span>
+                            {player.isCurrentUser && (
+                              <span className="text-xs font-bold text-[#00B050] shrink-0">
+                                (Вы)
+                              </span>
+                            )}
+                          </div>
+                          {player.phone && (
+                            <span className="text-xs text-slate-400 font-medium block truncate">
+                              {player.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 ml-2">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200/60">
+                          В игре
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -290,10 +290,11 @@ export class BookingsController {
         },
         include: {
           ground: true,
+          host_user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
           guests: {
             where: { status: 'approved' },
             include: {
-              user: { select: { id: true, full_name: true, phone_number: true } },
+              user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
             },
           },
         },
@@ -312,10 +313,10 @@ export class BookingsController {
           booking: {
             include: {
               ground: true,
-              host_user: { select: { id: true, full_name: true, phone_number: true } },
+              host_user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
               guests: {
                 where: { status: 'approved' },
-                include: { user: { select: { id: true, full_name: true } } },
+                include: { user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } } },
               },
             },
           },
@@ -374,10 +375,11 @@ export class BookingsController {
         },
         include: {
           ground: true,
+          host_user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
           guests: {
             where: { status: 'approved' },
             include: {
-              user: { select: { id: true, full_name: true, phone_number: true } },
+              user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
             },
           },
         },
@@ -396,10 +398,10 @@ export class BookingsController {
           booking: {
             include: {
               ground: true,
-              host_user: { select: { id: true, full_name: true, phone_number: true } },
+              host_user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } },
               guests: {
                 where: { status: 'approved' },
-                include: { user: { select: { id: true, full_name: true } } },
+                include: { user: { select: { id: true, full_name: true, phone_number: true, avatar_url: true } } },
               },
             },
           },
@@ -1601,6 +1603,125 @@ export class BookingsController {
         data: uniqueRequests,
       });
     } catch (error: any) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/bookings/:id/participants
+   * Returns details about organizer (creator) and accepted/active participants
+   */
+  public static async getBookingParticipants(req: AuthenticatedRequest, res: Response) {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params;
+
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: {
+          host_user: {
+            select: {
+              id: true,
+              full_name: true,
+              phone_number: true,
+              avatar_url: true,
+            },
+          },
+          guests: {
+            where: {
+              status: { in: ['approved', 'active', 'entered', 'APPROVED', 'ACTIVE', 'ENTERED', 'accepted', 'ACCEPTED'] },
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  full_name: true,
+                  phone_number: true,
+                  avatar_url: true,
+                },
+              },
+            },
+            orderBy: { created_at: 'asc' },
+          },
+          joinRequests: {
+            where: {
+              status: { in: ['APPROVED', 'approved', 'ACCEPTED', 'accepted'] },
+            },
+            orderBy: { created_at: 'asc' },
+          },
+        },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      // Build Organizer object
+      const organizer = {
+        id: booking.host_user?.id || booking.host_user_id,
+        fullName: booking.host_user?.full_name || 'Организатор',
+        phone: booking.host_user?.phone_number || '',
+        avatar: (booking.host_user as any)?.avatar_url || null,
+        isCurrentUser: booking.host_user_id === req.user.id,
+      };
+
+      // Build Participants list (deduplicating guests & approved join requests)
+      const participantsMap = new Map<string, any>();
+
+      for (const guest of booking.guests) {
+        const uId = guest.user?.id || guest.user_id;
+        const isCurrentUser = Boolean(uId === req.user.id || (req.user.iin && guest.user && (guest.user as any).iin === req.user.iin));
+        participantsMap.set(uId, {
+          id: guest.id,
+          userId: uId,
+          fullName: guest.user?.full_name || 'Участник',
+          phone: guest.user?.phone_number || '',
+          avatar: (guest.user as any)?.avatar_url || null,
+          status: 'ACCEPTED',
+          isCurrentUser,
+        });
+      }
+
+      for (const reqItem of booking.joinRequests) {
+        const alreadyExists = Array.from(participantsMap.values()).some(
+          (p) => (p.phone && p.phone === reqItem.user_phone) || (p.fullName && p.fullName === reqItem.user_name)
+        );
+        if (!alreadyExists) {
+          const isCurrentUser = Boolean(
+            (req.user.iin && reqItem.user_iin === req.user.iin) ||
+            (req.user.phone_number && reqItem.user_phone === req.user.phone_number)
+          );
+          participantsMap.set(reqItem.id, {
+            id: reqItem.id,
+            userId: reqItem.id,
+            fullName: reqItem.user_name || 'Участник',
+            phone: reqItem.user_phone || '',
+            avatar: null,
+            status: 'ACCEPTED',
+            isCurrentUser,
+          });
+        }
+      }
+
+      const participants = Array.from(participantsMap.values());
+
+      return res.json({
+        success: true,
+        data: {
+          bookingId: booking.id,
+          organizer,
+          creator: organizer,
+          participants,
+          totalCount: 1 + participants.length,
+        },
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.getBookingParticipants]', error);
       return res.status(500).json({ success: false, message: error.message });
     }
   }

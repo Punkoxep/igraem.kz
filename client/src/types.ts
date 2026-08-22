@@ -27,6 +27,24 @@ export interface Venue {
   occupiedSlots?: { id?: string; booking_date: string; start_time: string; end_time: string }[];
 }
 
+export interface ParticipantUser {
+  id: string;
+  userId?: string;
+  fullName: string;
+  phone?: string;
+  avatar?: string | null;
+  status?: string;
+  isCurrentUser?: boolean;
+}
+
+export interface BookingParticipantsData {
+  bookingId: string;
+  organizer: ParticipantUser;
+  creator?: ParticipantUser;
+  participants: ParticipantUser[];
+  totalCount: number;
+}
+
 export interface Booking {
   id: string;
   venueId: string;
@@ -45,7 +63,17 @@ export interface Booking {
   guests?: any[];
   isParticipant?: boolean;
   isHost?: boolean;
+  guestId?: string;
   participantsCount?: number;
+  hostName?: string;
+  hostPhone?: string;
+  host_user_id?: string;
+  host_user?: {
+    id: string;
+    full_name: string;
+    phone_number?: string;
+    avatar_url?: string;
+  };
 }
 
 export type ActiveTab = 'map' | 'bookings' | 'requests' | 'favorites' | 'profile';

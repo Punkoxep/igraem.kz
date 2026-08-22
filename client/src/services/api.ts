@@ -271,6 +271,39 @@ class ApiService {
     });
   }
 
+  public async getBookingParticipants(bookingId: string): Promise<{
+    success: boolean;
+    data: {
+      bookingId: string;
+      organizer: {
+        id: string;
+        fullName: string;
+        phone?: string;
+        avatar?: string | null;
+        isCurrentUser?: boolean;
+      };
+      creator?: {
+        id: string;
+        fullName: string;
+        phone?: string;
+        avatar?: string | null;
+        isCurrentUser?: boolean;
+      };
+      participants: Array<{
+        id: string;
+        userId?: string;
+        fullName: string;
+        phone?: string;
+        avatar?: string | null;
+        status?: string;
+        isCurrentUser?: boolean;
+      }>;
+      totalCount: number;
+    };
+  }> {
+    return this.request(`/bookings/${bookingId}/participants`);
+  }
+
   // --- Locks / Access Control APIs ---
   public async unlockDoor(payload: {
     bookingId?: string;

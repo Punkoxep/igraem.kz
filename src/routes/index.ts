@@ -111,6 +111,7 @@ router.post('/join-requests/:id/reject', authenticateJwt, (req: any, res: any, n
 
 router.get('/bookings/requests', authenticateJwt, BookingsController.getHostIncomingRequests as any);
 router.get('/bookings/my-requests-incoming', authenticateJwt, BookingsController.getHostIncomingRequests as any);
+router.get('/bookings/:id/participants', authenticateJwt, BookingsController.getBookingParticipants as any);
 router.post('/bookings/:id/request-join', authenticateJwt, BookingsController.requestJoinSlot as any);
 router.post('/bookings/:id/join-request', authenticateJwt, BookingsController.requestJoinSlot as any);
 router.get('/bookings/:id/requests', authenticateJwt, BookingsController.getBookingJoinRequests as any);

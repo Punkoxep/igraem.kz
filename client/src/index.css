@@ -197,7 +197,11 @@ html, body, #root {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
-/* User location marker tooltip & pulse effect */
+/* User location marker tooltip & pulse effect - completely non-interactive so taps pass through */
+.user-location-leaflet-icon {
+  pointer-events: none !important;
+}
+
 .custom-user-tooltip {
   background: #2563EB !important;
   color: #FFFFFF !important;
@@ -207,6 +211,8 @@ html, body, #root {
   border-radius: 8px !important;
   border: none !important;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+  pointer-events: none !important;
+  user-select: none !important;
 }
 
 .custom-user-tooltip::before {
@@ -226,6 +232,25 @@ html, body, #root {
 
 .user-pulse-ring {
   animation: userPulse 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  pointer-events: none !important;
+}
+
+/* Custom Venue Marker Hitbox & Touch Comfort */
+.custom-ball-leaflet-icon {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+.custom-map-pin-hitbox {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 /* Hide scrollbar */

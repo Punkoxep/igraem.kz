@@ -180,6 +180,8 @@ export const MapView: React.FC<MapViewProps> = ({
       const ballEmoji = venue.sport === 'football' ? '⚽' : '🏀';
       const pinSize = isSelected ? 40 : 34;
       const fontSize = isSelected ? 22 : 18;
+      // Hitbox with 13px+ comfortable padding around the visual pin
+      const hitboxSize = isSelected ? 66 : 60;
 
       // Slight offset for venues at the same school/location so both ⚽ and 🏀 are visible side-by-side
       const sameCoordsIndex = venues.filter(
@@ -189,35 +191,53 @@ export const MapView: React.FC<MapViewProps> = ({
       const effectiveLng = venue.lng + (sameCoordsIndex > 0 ? sameCoordsIndex * 0.00014 : 0);
 
       const pinHtml = `
-        <div class="custom-map-pin ${isSelected ? 'active' : ''}" style="
-          width: ${pinSize}px;
-          height: ${pinSize}px;
-          background: #FFFFFF;
-          border: ${isSelected ? '3px solid #00B050' : '2.5px solid #FFFFFF'};
-          border-radius: 50%;
-          box-shadow: ${isSelected ? '0 6px 18px rgba(0, 176, 80, 0.45)' : '0 4px 14px rgba(0, 0, 0, 0.22)'};
+        <div class="custom-map-pin-hitbox" style="
+          width: ${hitboxSize}px;
+          height: ${hitboxSize}px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: ${fontSize}px;
-          line-height: 1;
           cursor: pointer;
-          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-          transform: ${isSelected ? 'scale(1.18)' : 'scale(1)'};
-          user-select: none;
-        ">${ballEmoji}</div>
+          pointer-events: auto !important;
+          touch-action: manipulation;
+        ">
+          <div class="custom-map-pin ${isSelected ? 'active' : ''}" style="
+            width: ${pinSize}px;
+            height: ${pinSize}px;
+            background: #FFFFFF;
+            border: ${isSelected ? '3px solid #00B050' : '2.5px solid #FFFFFF'};
+            border-radius: 50%;
+            box-shadow: ${isSelected ? '0 6px 18px rgba(0, 176, 80, 0.45)' : '0 4px 14px rgba(0, 0, 0, 0.22)'};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: ${fontSize}px;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: ${isSelected ? 'scale(1.18)' : 'scale(1)'};
+            user-select: none;
+            pointer-events: auto;
+          ">${ballEmoji}</div>
+        </div>
       `;
 
       const customIcon = L.divIcon({
         html: pinHtml,
         className: 'custom-ball-leaflet-icon',
-        iconSize: [pinSize, pinSize],
-        iconAnchor: [pinSize / 2, pinSize / 2],
+        iconSize: [hitboxSize, hitboxSize],
+        iconAnchor: [hitboxSize / 2, hitboxSize / 2],
       });
 
-      const marker = L.marker([effectiveLat, effectiveLng], { icon: customIcon }).addTo(map);
+      const marker = L.marker([effectiveLat, effectiveLng], {
+        icon: customIcon,
+        zIndexOffset: isSelected ? 2000 : 1000,
+        interactive: true,
+        keyboard: false,
+      }).addTo(map);
 
-      marker.on('click', () => {
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
         onSelectVenue(venue);
       });
 
@@ -225,7 +245,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [venues, selectedVenue, onSelectVenue]);
 
-  // Update user current GPS pin on map
+  // Update user current GPS pin on map (completely non-interactive so taps pass through to venues underneath)
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -236,9 +256,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
     if (userCoords && userCoords.lat && userCoords.lng) {
       const userPinHtml = `
-        <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-          <div class="user-pulse-ring" style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: rgba(37, 99, 235, 0.35);"></div>
-          <div style="position: relative; width: 16px; height: 16px; border-radius: 50%; background: #2563EB; border: 3px solid #FFFFFF; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.6);"></div>
+        <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; pointer-events: none !important; user-select: none !important;">
+          <div class="user-pulse-ring" style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: rgba(37, 99, 235, 0.35); pointer-events: none !important;"></div>
+          <div style="position: relative; width: 16px; height: 16px; border-radius: 50%; background: #2563EB; border: 3px solid #FFFFFF; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.6); pointer-events: none !important;"></div>
         </div>
       `;
 
@@ -249,8 +269,22 @@ export const MapView: React.FC<MapViewProps> = ({
         iconAnchor: [16, 16],
       });
 
-      const marker = L.marker([userCoords.lat, userCoords.lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(mapRef.current);
-      marker.bindTooltip('Вы здесь', { permanent: true, direction: 'top', offset: [0, -10], className: 'custom-user-tooltip' });
+      // User location marker has low zIndexOffset (50) and interactive: false so clicks pass through
+      const marker = L.marker([userCoords.lat, userCoords.lng], {
+        icon: userIcon,
+        zIndexOffset: 50,
+        interactive: false,
+        keyboard: false,
+      }).addTo(mapRef.current);
+
+      marker.bindTooltip('Вы здесь', {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -10],
+        className: 'custom-user-tooltip',
+        interactive: false,
+      });
+
       userMarkerRef.current = marker;
     }
   }, [userCoords]);

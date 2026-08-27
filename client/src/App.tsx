@@ -681,9 +681,12 @@ export const App: React.FC = () => {
 
   const handleOpenVenue = (booking: Booking) => {
     const isOngoing = isBookingOngoingNow(booking);
-    if (isOngoing) {
+    if (isOngoing || booking.isOpened) {
       setCurrentBookingSuccess(null);
       setOpenedVenueBooking(booking);
+      if (booking.isOpened) {
+        showToast('Замок разблокирован! Добро пожаловать на площадку 🎉', 'success');
+      }
     } else {
       // In WAITING state (now < startTime - 10 min) -> open Waiting Screen with countdown timer
       setCurrentBookingSuccess(booking);

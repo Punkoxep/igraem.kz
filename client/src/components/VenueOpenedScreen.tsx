@@ -286,6 +286,11 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
           if (res && res.success === false) {
             alert(res.message || 'Не удалось открыть дверь');
           } else {
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              try {
+                navigator.vibrate([100, 50, 100]);
+              } catch (e) {}
+            }
             setActiveModal('doorOpened');
           }
         } catch (e: any) {
@@ -305,6 +310,11 @@ export const VenueOpenedScreen: React.FC<VenueOpenedScreenProps> = ({
           });
 
           if (res && res.success) {
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              try {
+                navigator.vibrate([100, 50, 100]);
+              } catch (e) {}
+            }
             setActiveModal('doorOpened');
             setIsUnlocking(false);
             return;

@@ -119,6 +119,8 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
   const [problemText, setProblemText] = useState('');
   const [problemSent, setProblemSent] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
   const touchStartY = useRef<number | null>(null);
 
   // Live real-time tick interval every 1 second
@@ -131,6 +133,68 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
 
   const countdownInfo = useMemo(() => getBookingCountdownInfo(booking, currentTime), [booking, currentTime]);
   const canOpenNow = countdownInfo.canOpenNow;
+
+  const handleOpenVenueWithUnlock = async () => {
+    setIsUnlocking(true);
+    setUnlockErrorMessage(null);
+
+    const performUnlock = async (coords?: { latitude: number; longitude: number }) => {
+      try {
+        const payload: any = {
+          bookingId: booking.id,
+          booking_id: booking.id,
+          qrCode: booking.qrCode,
+        };
+
+        if (coords) {
+          payload.latitude = coords.latitude;
+          payload.longitude = coords.longitude;
+          payload.userLatitude = coords.latitude;
+          payload.userLongitude = coords.longitude;
+        }
+
+        const res = await api.unlockDoor(payload);
+        if (res && res.success === false) {
+          throw new Error(res.message || 'Не удалось открыть замок');
+        }
+
+        // Haptic feedback (tactile vibration)
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate([100, 50, 100]);
+          } catch (e) {}
+        }
+
+        // Transition directly to active venue screen with isOpened = true
+        onOpenVenue({
+          ...booking,
+          isOpened: true,
+        });
+      } catch (err: any) {
+        console.warn('[BookingSuccessScreen] Unlock error:', err);
+        setUnlockErrorMessage(
+          err.message || 'Не удалось открыть замок. Убедитесь, что вы находитесь рядом с площадкой и включена геолокация.'
+        );
+      } finally {
+        setIsUnlocking(false);
+      }
+    };
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          performUnlock({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        },
+        (err) => {
+          console.warn('[BookingSuccessScreen] Geolocation error:', err);
+          performUnlock();
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      performUnlock();
+    }
+  };
 
   // Touch swipe down handlers to close modal
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -430,16 +494,60 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
             </button>
           )}
 
+          {/* Unlock Error Card with Try Again & Proceed to Booking options */}
+          {unlockErrorMessage && (
+            <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-3.5 text-left space-y-2.5 animate-fade-in shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-rose-900 block leading-tight">
+                    Не удалось открыть замок
+                  </span>
+                  <p className="text-[11px] text-rose-700 font-medium leading-relaxed pt-0.5">
+                    {unlockErrorMessage}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={handleOpenVenueWithUnlock}
+                  disabled={isUnlocking}
+                  className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all active:scale-98 shadow-xs cursor-pointer text-center disabled:opacity-50"
+                >
+                  Попробовать снова
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenVenue(booking)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200/80 transition-all cursor-pointer text-center"
+                >
+                  К экрану брони
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Bottom Unlock Button */}
           <div className="pt-2">
             {canOpenNow ? (
               <button
                 type="button"
-                onClick={() => onOpenVenue(booking)}
-                className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-sm transition-all shadow-md shadow-[#00B050]/20 active:scale-98 cursor-pointer"
+                disabled={isUnlocking}
+                onClick={handleOpenVenueWithUnlock}
+                className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-sm transition-all shadow-md shadow-[#00B050]/20 active:scale-98 cursor-pointer disabled:opacity-80"
               >
-                <Unlock className="w-5 h-5 stroke-[2.2px]" />
-                <span>Открыть площадку</span>
+                {isUnlocking ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Открываем замок...</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-5 h-5 stroke-[2.2px]" />
+                    <span>Открыть площадку</span>
+                  </>
+                )}
               </button>
             ) : (
               <button

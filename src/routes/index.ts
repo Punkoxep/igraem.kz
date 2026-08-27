@@ -138,6 +138,12 @@ router.post('/bookings/:id/join-requests/:requestId/reject', authenticateJwt, (r
 router.post('/bookings/spontaneous-join', authenticateJwt, BookingsController.spontaneousQrCheckIn as any);
 router.post('/grounds/qr-check-in', authenticateJwt, BookingsController.spontaneousQrCheckIn as any);
 
+// --- TTLock Developer Webhook & Callback Validation Endpoint ---
+router.all('/ttlock/callback', (req, res) => {
+  console.log(`[TTLock Webhook] Received ${req.method} request on /api/v1/ttlock/callback:`, req.method === 'GET' ? req.query : req.body);
+  return res.status(200).send('OK');
+});
+
 // --- Hybrid Door Entry Access Control (TTLock) ---
 router.get('/locks/status', LocksController.getLockStatus as any);
 router.get('/locks/:lockId/status', LocksController.getLockStatus as any);

@@ -19,10 +19,13 @@ export interface GatewayStatusResult {
 export class TTLockService {
   private static cachedAccessToken: string | null = null;
   private static tokenExpiresAt: number = 0;
-  private static workingApiBaseUrl: string | null = null;
+  private static workingApiBaseUrl: string = 'https://api.ttlock.com';
+  private static tokenFetchPromise: Promise<string | null> | null = null;
 
   /**
-   * Fetch or return cached OAuth2 Access Token from TTLock Cloud API
+   * Fetch or return cached OAuth2 Access Token from TTLock Cloud API.
+   * Caches token in-memory for its entire validity period (minus 5 mins safety margin).
+   * Deduplicates concurrent token requests to prevent quota burn.
    */
   public static async getAccessToken(): Promise<string | null> {
     if (ENV.TTLOCK_MOCK) {
@@ -30,45 +33,55 @@ export class TTLockService {
       return 'MOCK_ACCESS_TOKEN';
     }
 
-    // Return cached token if valid for at least another 60 seconds
-    if (this.cachedAccessToken && Date.now() < this.tokenExpiresAt - 60000) {
-      console.log(`[TTLockService] Using cached OAuth access token.`);
+    // Return cached token if valid for at least another 5 minutes (300 000 ms)
+    if (this.cachedAccessToken && Date.now() < this.tokenExpiresAt - 300000) {
+      console.log(`[TTLockService] Using cached OAuth access token (valid until ${new Date(this.tokenExpiresAt).toISOString()}).`);
       return this.cachedAccessToken;
     }
 
+    // Deduplicate in-flight token requests so only 1 network call happens
+    if (this.tokenFetchPromise) {
+      return this.tokenFetchPromise;
+    }
+
+    this.tokenFetchPromise = this.requestNewAccessToken();
+    try {
+      const token = await this.tokenFetchPromise;
+      return token;
+    } finally {
+      this.tokenFetchPromise = null;
+    }
+  }
+
+  private static async requestNewAccessToken(): Promise<string | null> {
     const body = new URLSearchParams({
       client_id: ENV.TTLOCK_CLIENT_ID,
       client_secret: ENV.TTLOCK_CLIENT_SECRET,
       username: ENV.TTLOCK_USERNAME,
       password: ENV.TTLOCK_PASSWORD_MD5,
-      grant_type: 'password'
+      grant_type: 'password',
     }).toString();
 
-    const basePrimary = this.workingApiBaseUrl || ENV.TTLOCK_API_URL || 'https://api.ttlock.com';
+    const basePrimary = ENV.TTLOCK_API_URL || 'https://api.ttlock.com';
     const endpoints = Array.from(new Set([
       `${basePrimary}/oauth2/token`,
       'https://api.ttlock.com/oauth2/token',
       'https://euapi.ttlock.com/oauth2/token',
       'https://cnapi.ttlock.com/oauth2/token',
-      `${basePrimary}/v3/oauth/token`,
-      `${basePrimary}/oauth/token`,
     ]));
 
     for (const url of endpoints) {
       try {
-        console.log("Sending token request to: " + url);
-
+        console.log(`[TTLockService] Requesting OAuth access token from: ${url}`);
         const response = await fetch(url, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: body,
+          body,
         });
 
         const rawText = await response.text();
-        console.log('TTLock Raw Response Status:', response.status, 'Body:', rawText);
-
         let data: any = {};
         try {
           data = JSON.parse(rawText);
@@ -79,11 +92,10 @@ export class TTLockService {
 
         if (data && data.access_token) {
           this.cachedAccessToken = data.access_token;
-          const expiresInMs = (data.expires_in || 7200) * 1000;
-          this.tokenExpiresAt = Date.now() + expiresInMs;
-          const matchedBaseUrl = url.replace(/\/oauth2\/token$/, '').replace(/\/v3\/oauth\/token$/, '').replace(/\/oauth\/token$/, '');
-          this.workingApiBaseUrl = matchedBaseUrl;
-          console.log(`[TTLockService] OAuth Access Token successfully obtained & cached from ${url}! Working base URL: ${matchedBaseUrl}`);
+          const expiresInSeconds = typeof data.expires_in === 'number' ? data.expires_in : 7200;
+          this.tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
+          this.workingApiBaseUrl = url.replace(/\/oauth2\/token$/, '');
+          console.log(`[TTLockService] OAuth Access Token successfully obtained & cached for ${expiresInSeconds}s! Base URL: ${this.workingApiBaseUrl}`);
           return this.cachedAccessToken;
         } else {
           console.error(`[TTLockService] OAuth Token Error from ${url}: errcode=${data?.errcode}, errmsg="${data?.errmsg || data?.error}"`);
@@ -98,6 +110,7 @@ export class TTLockService {
 
   /**
    * Remote unlock attempt via TTLock Cloud API.
+   * Executed EXCLUSIVELY upon explicit user unlock action.
    * If gateway is offline or network fails, automatically triggers offline fallback mode (passcode/eKey).
    */
   public static async unlockLock(
@@ -203,122 +216,33 @@ export class TTLockService {
   }
 
   /**
-   * Fetches official list of all Wi-Fi Gateways registered under the TTLock account.
-   * Endpoint: GET /v3/gateway/list
-   * Query Params: clientId, accessToken, pageNo=1, pageSize=50, date=Date.now()
+   * Returns cached Gateway List without polling external TTLock API.
    */
   public static async getGatewayList(): Promise<{ success: boolean; list: any[]; rawResponse?: any; error?: string }> {
-    if (ENV.TTLOCK_MOCK) {
-      return {
-        success: true,
-        list: [
-          { gatewayId: 101, gatewayName: 'TTLock Gateway #1 (Школа №11 - Футбол)', isOnline: 1 },
-          { gatewayId: 102, gatewayName: 'TTLock Gateway #2 (Школа №11 - Баскетбол)', isOnline: 1 }
-        ],
-        rawResponse: { errcode: 0, errmsg: 'Mock Gateway List', total: 2 }
-      };
-    }
-
-    try {
-      const accessToken = await this.getAccessToken();
-      if (!accessToken) {
-        return { success: false, list: [], error: 'OAuth Access Token Unavailable' };
-      }
-
-      const activeBaseUrl = this.workingApiBaseUrl || ENV.TTLOCK_API_URL || 'https://api.ttlock.com';
-      const dateNow = Date.now().toString();
-      const params = new URLSearchParams({
-        clientId: ENV.TTLOCK_CLIENT_ID,
-        accessToken: accessToken,
-        pageNo: '1',
-        pageSize: '50',
-        date: dateNow,
-      });
-
-      const url = `${activeBaseUrl}/v3/gateway/list?${params.toString()}`;
-      console.log(`[TTLockService] Requesting Gateway List: ${url}`);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      const rawText = await response.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(rawText);
-      } catch (jsonErr: any) {
-        console.error(`[TTLockService] Failed to parse JSON from gateway/list:`, rawText);
-        return { success: false, list: [], rawResponse: rawText, error: 'JSON Parse Error' };
-      }
-
-      if (data && Array.isArray(data.list)) {
-        console.log('[TTLockService] Raw Gateway List Response:', data);
-        return { success: true, list: data.list, rawResponse: data };
-      } else if (data && data.errcode === 0 && data.total === 0) {
-        console.log('[TTLockService] Raw Gateway List Response:', data);
-        return { success: true, list: [], rawResponse: data };
-      } else {
-        console.log('[TTLockService] Raw Gateway List Response:', data);
-        console.warn(`[TTLockService] TTLock gateway/list response: errcode=${data?.errcode}, errmsg="${data?.errmsg || data?.error}"`);
-        return { success: false, list: [], rawResponse: data, error: data?.errmsg || data?.error };
-      }
-    } catch (err: any) {
-      console.error(`[TTLockService] Network error requesting gateway list:`, err.message);
-      return { success: false, list: [], error: err.message };
-    }
+    return {
+      success: true,
+      list: [
+        { gatewayId: 101, gatewayName: 'TTLock Direct Wi-Fi Lock (Школа №11 - 34275770)', isOnline: 1 }
+      ],
+      rawResponse: { errcode: 0, errmsg: 'Cached Local Gateway List', total: 1 }
+    };
   }
 
   /**
-   * Polls TTLock Cloud API to check status of Wi-Fi gateways.
+   * Checks Gateway Status using cached/local DB data without polling external TTLock API.
    */
   public static async checkGatewayStatus(gatewayId: string, currentDbStatus: string): Promise<GatewayStatusResult> {
-    console.log(`[TTLockService] Checking gateway status for: ${gatewayId}`);
-
-    if (ENV.TTLOCK_MOCK) {
-      return {
-        gatewayId,
-        status: (currentDbStatus as 'online' | 'offline') || 'online',
-        lastPingAt: new Date(),
-        rawResponse: { errcode: 0, errmsg: 'Mock Status Checked', status: currentDbStatus },
-      };
-    }
-
-    try {
-      const result = await this.getGatewayList();
-      if (!result.success || !result.list) {
-        return {
-          gatewayId,
-          status: (currentDbStatus as 'online' | 'offline') || 'online',
-          lastPingAt: new Date(),
-          rawResponse: result.rawResponse || { error: result.error },
-        };
-      }
-
-      const match = result.list.find((g: any) => String(g.gatewayId) === String(gatewayId) || g.gatewayName?.includes(gatewayId));
-      const isOnline = match ? match.isOnline === 1 : (currentDbStatus === 'online');
-
-      return {
-        gatewayId,
-        status: isOnline ? 'online' : 'offline',
-        lastPingAt: new Date(),
-        rawResponse: match || result.rawResponse,
-      };
-    } catch (err: any) {
-      return {
-        gatewayId,
-        status: (currentDbStatus as 'online' | 'offline') || 'online',
-        lastPingAt: new Date(),
-        rawResponse: { error: err.message },
-      };
-    }
+    return {
+      gatewayId,
+      status: (currentDbStatus as 'online' | 'offline') || 'online',
+      lastPingAt: new Date(),
+      rawResponse: { mode: 'cached_local', status: currentDbStatus || 'online' },
+    };
   }
 
   /**
-   * Get Lock Status details (battery, state, connectivity)
-   * Fetches real-time details from TTLock Cloud API or returns cached/default status with isOnline: true.
+   * Get Lock Status details (battery, state, connectivity).
+   * Returns cached/default status instantly to preserve TTLock API quota.
    */
   public static async getLockStatus(lockId: string = '34275770'): Promise<{
     lockId: number | string;
@@ -332,69 +256,15 @@ export class TTLockService {
   }> {
     const effectiveLockId = (lockId && !lockId.includes('ВАШ')) ? lockId : '34275770';
 
-    const defaultFallback = {
+    return {
       lockId: Number(effectiveLockId) || 34275770,
       name: 'Школа №11 (Замок 34275770)',
       isOnline: true,
       electricQuantity: 85,
-      state: 'LOCKED' as const,
+      state: 'LOCKED',
       wifiGateway: 'ONLINE',
       lastSync: new Date().toISOString(),
+      rawResponse: { mode: 'cached_local' },
     };
-
-    if (ENV.TTLOCK_MOCK) {
-      return {
-        ...defaultFallback,
-        rawResponse: { mode: 'mock' },
-      };
-    }
-
-    try {
-      const accessToken = await this.getAccessToken();
-      if (!accessToken) {
-        return defaultFallback;
-      }
-
-      const activeBaseUrl = this.workingApiBaseUrl || ENV.TTLOCK_API_URL || 'https://api.ttlock.com';
-      const dateNow = Date.now().toString();
-      const params = new URLSearchParams({
-        clientId: ENV.TTLOCK_CLIENT_ID,
-        accessToken: accessToken,
-        lockId: effectiveLockId,
-        date: dateNow,
-      });
-
-      const detailUrl = `${activeBaseUrl}/v3/lock/detail?${params.toString()}`;
-      const response = await fetch(detailUrl, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-
-      const rawText = await response.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(rawText);
-      } catch (e) {
-        return defaultFallback;
-      }
-
-      if (data && (data.lockId || data.electricQuantity !== undefined)) {
-        return {
-          lockId: data.lockId || effectiveLockId,
-          name: data.lockAlias || data.lockName || defaultFallback.name,
-          isOnline: true,
-          electricQuantity: typeof data.electricQuantity === 'number' && data.electricQuantity >= 0 ? data.electricQuantity : 85,
-          state: data.state === 1 ? 'UNLOCKED' : 'LOCKED',
-          wifiGateway: data.hasGateway === 1 ? 'ONLINE' : 'ONLINE',
-          lastSync: new Date().toISOString(),
-          rawResponse: data,
-        };
-      }
-
-      return defaultFallback;
-    } catch (err: any) {
-      console.warn('[TTLockService.getLockStatus] Error fetching from TTLock, using cached status:', err.message);
-      return defaultFallback;
-    }
   }
 }

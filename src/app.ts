@@ -19,6 +19,12 @@ const clientDistPath = path.join(__dirname, '../client/dist');
 app.use(express.static(clientDistPath));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Dedicated TTLock Webhook & Developer Console Callback (returns 200 OK for GET/POST verification)
+app.all(['/ttlock/callback', '/api/v1/ttlock/callback'], (req, res) => {
+  console.log(`[TTLock Webhook] Received ${req.method} request on ${req.originalUrl}:`, req.method === 'GET' ? req.query : req.body);
+  return res.status(200).send('OK');
+});
+
 // API Routes
 app.use('/api/v1', router);
 

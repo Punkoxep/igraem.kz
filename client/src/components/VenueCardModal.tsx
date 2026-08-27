@@ -161,7 +161,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
 
   const maxAllowedHoursToday = Math.max(0, 3 - userBookedHoursToday);
 
-  // Helper to determine one of 4 slot states: 'past' | 'my_booking' | 'occupied' | 'available'
+  // Helper to determine one of 5 slot states: 'past' | 'school' | 'my_booking' | 'occupied' | 'available'
   const getSlotInfo = (slotTime: string, dateIdx: number = selectedDateIdx) => {
     const times = slotTime.split('–').map((t) => t.trim());
     const slotStart = times[0] || '08:00';
@@ -171,7 +171,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
     const targetIsoDate = targetDay.isoDateStr;
     const targetFullDate = targetDay.fullDateStr;
 
-    // State 4: Прошедшее время (только для сегодняшней даты, если currentTime >= slotEnd)
+    // State 1: Прошедшее время (только для сегодняшней даты, если currentTime >= slotEnd)
     const now = new Date();
     const currentHours = String(now.getHours()).padStart(2, '0');
     const currentMins = String(now.getMinutes()).padStart(2, '0');
@@ -179,6 +179,43 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
     const isPast = dateIdx === 0 && currentTimeStr >= slotEnd;
     if (isPast) {
       return { state: 'past' as const, label: slotTime };
+    }
+
+    // State 2: Школьные часы (уроки физкультуры)
+    const isSchoolCourt = venue.isSchoolCourt !== false;
+    const schoolStart = venue.schoolHoursStart || '08:00';
+    const schoolEnd = venue.schoolHoursEnd || '15:00';
+    const schoolDays = venue.schoolDays || '5-day';
+
+    let dayOfWeek = 0;
+    if (targetIsoDate) {
+      const [y, m, d] = targetIsoDate.split('-').map(Number);
+      dayOfWeek = new Date(y, m - 1, d).getDay();
+    } else if (targetFullDate) {
+      const [d, m, y] = targetFullDate.split('.').map(Number);
+      dayOfWeek = new Date(y, m - 1, d).getDay();
+    }
+
+    let isSchoolDay = false;
+    const sDays = (schoolDays || '').toUpperCase();
+    if (sDays === 'VACATION' || sDays === 'NONE' || sDays === 'КАНИКУЛЫ') {
+      isSchoolDay = false; // Каникулы: слоты НЕ блокируются, доступны для брони
+    } else if (sDays === '7-DAY' || sDays === 'ALL' || sDays === 'EVERYDAY') {
+      isSchoolDay = true; // Все дни (0..6)
+    } else if (sDays === '6-DAY' || sDays === 'MON_SAT' || sDays === '6-ДНЕВКА') {
+      isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 6; // Пн–Сб (1..6)
+    } else {
+      // '5-day' (Пн–Пт: 1..5) - default
+      isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+    }
+
+    const isSchoolHour = isSchoolCourt && isSchoolDay && (slotStart < schoolEnd && slotEnd > schoolStart);
+    if (isSchoolHour) {
+      return {
+        state: 'school' as const,
+        label: `${slotTime} (🏫 Уроки)`,
+        badge: '🏫 Уроки',
+      };
     }
 
     const overlaps = (sA: string, eA: string, sB: string, eB: string) => {
@@ -210,7 +247,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
       (apiBooking && (apiBooking.isParticipant || apiBooking.is_participant)) ||
       (myLocalBooking && myLocalBooking.isParticipant);
 
-    // State 1: «Ваша бронь» (создатель бронирования)
+    // State 3: «Ваша бронь» (создатель бронирования)
     if (isHost) {
       return {
         state: 'my_booking' as const,
@@ -220,7 +257,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
       };
     }
 
-    // State 1.2: «Вы участвуете» (одобренный участник совместной игры)
+    // State 3.2: «Вы участвуете» (одобренный участник совместной игры)
     if (isParticipant) {
       return {
         state: 'my_booking' as const,
@@ -230,7 +267,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
       };
     }
 
-    // State 2: «Занято другим пользователем»
+    // State 4: «Занято другим пользователем»
     const isVenueOcc = venue.occupiedSlots?.some((occ) => {
       const occDate = occ.booking_date;
       if (occDate !== targetFullDate && occDate !== targetIsoDate) return false;
@@ -246,7 +283,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
       };
     }
 
-    // State 3: «Свободный слот»
+    // State 5: «Свободный слот»
     return {
       state: 'available' as const,
       label: slotTime,
@@ -256,6 +293,10 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
   // Contiguous slot selection logic for available slots
   const handleSlotClick = (slotTime: string) => {
     setSlotWarningMsg(null);
+    const info = getSlotInfo(slotTime);
+    if (info.state === 'school' || info.state === 'past' || info.state === 'my_booking') {
+      return; // Cannot select school hour slots or non-available slots
+    }
     const clickedIdx = getSlotIndex(slotTime);
     if (clickedIdx === -1) return;
 
@@ -486,13 +527,13 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
           })}
         </div>
 
-        {/* Time Slots Grid (4 distinct states) */}
+        {/* Time Slots Grid (5 distinct states: past, school, my_booking, occupied, available) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3 max-h-[320px] overflow-y-auto pr-0.5">
           {TIME_SLOTS_GRID.map((slotItem, idx) => {
             const isSelected = selectedSlotTimes.includes(slotItem.time);
             const info = getSlotInfo(slotItem.time, selectedDateIdx);
 
-            // State 4: «Прошедшее время»
+            // State 1: «Прошедшее время»
             if (info.state === 'past') {
               return (
                 <div
@@ -505,7 +546,23 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
               );
             }
 
-            // State 1: «Ваша бронь» (занято текущим пользователем)
+            // State 2: «Школьные часы (Уроки физкультуры)»
+            if (info.state === 'school') {
+              return (
+                <div
+                  key={idx}
+                  className="py-3 px-3.5 rounded-2xl text-xs bg-[#F1F3F5] border border-slate-200/80 text-slate-500 font-semibold flex items-center justify-between opacity-75 cursor-not-allowed select-none shadow-xs"
+                  title="Школьные часы: зарезервировано под уроки физкультуры и занятия для школьников"
+                >
+                  <span className="truncate mr-1 text-slate-600 font-medium">{slotItem.time}</span>
+                  <span className="text-[10px] bg-slate-200/90 text-slate-700 px-2 py-0.5 rounded-md font-bold shrink-0 flex items-center gap-0.5 border border-slate-300/60">
+                    🏫 Уроки
+                  </span>
+                </div>
+              );
+            }
+
+            // State 3: «Ваша бронь» (занято текущим пользователем)
             if (info.state === 'my_booking') {
               return (
                 <div
@@ -521,7 +578,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
               );
             }
 
-            // State 2: «Занято другим пользователем»
+            // State 4: «Занято другим пользователем»
             if (info.state === 'occupied') {
               return (
                 <button
@@ -543,7 +600,7 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
               );
             }
 
-            // State 3: «Свободный слот»
+            // State 5: «Свободный слот»
             return (
               <button
                 key={idx}

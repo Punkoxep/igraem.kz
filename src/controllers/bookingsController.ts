@@ -1190,13 +1190,16 @@ export class BookingsController {
         status: { in: ['confirmed', 'active', 'upcoming', 'CONFIRMED', 'ACTIVE', 'UPCOMING', 'pending', 'PENDING'] },
       };
 
+      let ground = null;
       if (groundId) {
-        let ground = await prisma.ground.findUnique({ where: { id: groundId } });
+        ground = await prisma.ground.findUnique({ where: { id: groundId } });
         if (!ground) {
           if (groundId.includes('football')) {
             ground = await prisma.ground.findFirst({ where: { type: 'football' } });
           } else if (groundId.includes('basketball')) {
             ground = await prisma.ground.findFirst({ where: { type: 'basketball' } });
+          } else {
+            ground = await prisma.ground.findFirst();
           }
         }
         whereClause.ground_id = ground ? ground.id : groundId;
@@ -1220,6 +1223,30 @@ export class BookingsController {
         orderBy: [{ booking_date: 'asc' }, { start_time: 'asc' }],
       });
 
+      // Calculate School Schedule parameters
+      const isSchoolCourt = ground ? ground.is_school_court : true;
+      const schoolHoursStart = ground?.school_hours_start || '08:00';
+      const schoolHoursEnd = ground?.school_hours_end || '15:00';
+      const schoolDaysMode = ground?.school_days || '5-day';
+
+      let isSchoolDay = false;
+      if (normalizedDate && isSchoolCourt) {
+        const dateObj = new Date(`${normalizedDate}T00:00:00`);
+        const dayOfWeek = dateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+
+        const sDays = (schoolDaysMode || '').toUpperCase();
+        if (sDays === 'NONE' || sDays === 'VACATION' || sDays === 'КАНИКУЛЫ') {
+          isSchoolDay = false; // Vacation - free all days
+        } else if (sDays === '7-DAY' || sDays === 'ALL' || sDays === 'EVERYDAY') {
+          isSchoolDay = true; // Every day
+        } else if (sDays === '6-DAY' || sDays === 'MON_SAT' || sDays === '6-ДНЕВКА') {
+          isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 6; // Mon - Sat
+        } else {
+          // '5-day' or 'MON_FRI' (default)
+          isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 5; // Mon - Fri
+        }
+      }
+
       const data = bookings.map((b) => {
         const isHost = Boolean(currentUserId && b.host_user_id === currentUserId);
         const isParticipant = Boolean(
@@ -1229,6 +1256,9 @@ export class BookingsController {
         const approvedGuestsCount = b.guests.filter((g) => g.status === 'approved').length;
         const participantsCount = 1 + approvedGuestsCount;
         const isFull = participantsCount >= 15;
+
+        // Check if this booking falls into school hours
+        const isSchoolHour = isSchoolCourt && isSchoolDay && (b.start_time < schoolHoursEnd && b.end_time > schoolHoursStart);
 
         return {
           id: b.id,
@@ -1246,6 +1276,10 @@ export class BookingsController {
           status: b.status,
           isOccupied: true,
           is_occupied: true,
+          isAvailable: false,
+          is_available: false,
+          isSchoolHour,
+          is_school_hour: isSchoolHour,
           isMyBooking: isMyBooking,
           is_my_booking: isMyBooking,
           isHost: isHost,
@@ -1262,9 +1296,79 @@ export class BookingsController {
         };
       });
 
+      // Generate complete slots grid for the day with accurate availability and school hour flags
+      const STANDARD_SLOTS = [
+        '08:00 – 09:00',
+        '09:00 – 10:00',
+        '10:00 – 11:00',
+        '11:00 – 12:00',
+        '12:00 – 13:00',
+        '13:00 – 14:00',
+        '14:00 – 15:00',
+        '15:00 – 16:00',
+        '16:00 – 17:00',
+        '17:00 – 18:00',
+        '18:00 – 19:00',
+        '19:00 – 20:00',
+        '20:00 – 21:00',
+        '21:00 – 22:00',
+        '22:00 – 23:00',
+      ];
+
+      const computedSlots = STANDARD_SLOTS.map((timeRange, index) => {
+        const [sTime, eTime] = timeRange.split('–').map((t) => t.trim());
+        const isSchoolHour = isSchoolCourt && isSchoolDay && (sTime < schoolHoursEnd && eTime > schoolHoursStart);
+
+        const matchingBooking = bookings.find(
+          (b) => sTime < b.end_time && eTime > b.start_time
+        );
+        const isOccupied = Boolean(matchingBooking);
+        const isAvailable = !isSchoolHour && !isOccupied;
+
+        let status = 'available';
+        let reason = 'available';
+        if (isSchoolHour) {
+          status = 'school';
+          reason = 'school_hours';
+        } else if (isOccupied) {
+          status = 'occupied';
+          reason = 'occupied';
+        }
+
+        return {
+          id: `slot-${index + 1}`,
+          time: timeRange,
+          startTime: sTime,
+          start_time: sTime,
+          endTime: eTime,
+          end_time: eTime,
+          isSchoolHour,
+          is_school_hour: isSchoolHour,
+          isOccupied,
+          is_occupied: isOccupied,
+          isAvailable,
+          is_available: isAvailable,
+          status,
+          reason,
+          booking: matchingBooking ? {
+            id: matchingBooking.id,
+            hostName: matchingBooking.host_user?.full_name || 'Организатор',
+            participantsCount: 1 + matchingBooking.guests.length,
+          } : null,
+        };
+      });
+
       return res.json({
         success: true,
+        school_info: {
+          is_school_court: isSchoolCourt,
+          is_school_day: isSchoolDay,
+          school_hours_start: schoolHoursStart,
+          school_hours_end: schoolHoursEnd,
+          school_days: schoolDaysMode,
+        },
         data,
+        slots: computedSlots,
       });
     } catch (error: any) {
       console.error('[BookingsController.getOccupiedSlots]', error);

@@ -161,6 +161,10 @@ export const App: React.FC = () => {
             { id: 's3', time: '19:00 – 20:00', isAvailable: true },
           ],
           occupiedSlots: g.occupied_slots || [],
+          isSchoolCourt: g.is_school_court !== undefined ? Boolean(g.is_school_court) : true,
+          schoolHoursStart: g.school_hours_start || '08:00',
+          schoolHoursEnd: g.school_hours_end || '15:00',
+          schoolDays: g.school_days || '5-day',
         }));
         setVenues(mappedVenues);
       }

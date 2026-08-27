@@ -25,6 +25,10 @@ export interface Venue {
   surface: string;
   slots: TimeSlot[];
   occupiedSlots?: { id?: string; booking_date: string; start_time: string; end_time: string }[];
+  isSchoolCourt?: boolean;
+  schoolHoursStart?: string;
+  schoolHoursEnd?: string;
+  schoolDays?: string; // '5-day' | '6-day' | '7-day' | 'vacation' | 'MON_FRI' | 'MON_SAT' | 'ALL' | 'VACATION'
 }
 
 export interface ParticipantUser {

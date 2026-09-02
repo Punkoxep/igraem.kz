@@ -1,5 +1,12 @@
 const API_BASE_URL = '/api/v1';
 
+export interface UserBanInfo {
+  id?: string;
+  ground_id?: string | null;
+  reason?: string;
+  banned_until: string;
+}
+
 export interface UserProfile {
   id: string;
   iin: string;
@@ -9,6 +16,10 @@ export interface UserProfile {
   role: string;
   birth_date?: string;
   gender?: string;
+  is_blocked?: boolean;
+  is_banned?: boolean;
+  banned_until?: string | null;
+  userBans?: UserBanInfo[];
   notify_30min?: boolean;
   push_subscription?: string | null;
 }
@@ -67,7 +78,13 @@ class ApiService {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || 'Ошибка сети');
+      const err: any = new Error(data.message || 'Ошибка сети');
+      err.data = data;
+      err.status = response.status;
+      err.error = data.error;
+      err.reason = data.reason;
+      err.blocked_until = data.blocked_until;
+      throw err;
     }
 
     return data as T;
@@ -161,6 +178,24 @@ class ApiService {
     return this.request<{ success: boolean; email?: string; message: string; data?: { user: UserProfile } }>('/user/verify-email', {
       method: 'POST',
       body: JSON.stringify({ code }),
+    });
+  }
+
+  public async googleAuth(credential: string): Promise<AuthResponse> {
+    const res = await this.request<AuthResponse>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    });
+    if (res.data?.token) {
+      this.setToken(res.data.token);
+    }
+    return res;
+  }
+
+  public async updateIin(iin: string): Promise<{ success: boolean; message?: string; data?: { user: UserProfile } }> {
+    return this.request<{ success: boolean; message?: string; data?: { user: UserProfile } }>('/user/iin', {
+      method: 'PATCH',
+      body: JSON.stringify({ iin }),
     });
   }
 

@@ -40,10 +40,6 @@ export const FavoritesTab: React.FC<FavoritesTabProps> = ({
                     <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-900 text-[10px] font-normal border border-slate-200/60">
                       {venue.sport === 'football' ? '⚽ Футбол' : '🏀 Баскетбол'}
                     </span>
-                    <div className="flex items-center gap-1 text-amber-500 text-xs font-bold">
-                      <Star className="w-3.5 h-3.5 fill-amber-400" />
-                      <span>{venue.rating ? venue.rating.toFixed(1) : '0.0'}</span>
-                    </div>
                   </div>
                   <h2 className="text-base font-bold text-slate-900 leading-tight">
                     {venue.title}

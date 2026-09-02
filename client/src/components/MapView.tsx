@@ -5,6 +5,14 @@ import { CityName, Venue, Booking } from '../types';
 import { CITIES_CONFIG } from '../data/venuesData';
 import { formatDateDDMMYYYY } from '../utils/date';
 
+export const getSportIcon = (sport: string): string => {
+  const s = (sport || '').toLowerCase();
+  if (s === 'basketball') return '🏀';
+  if (s === 'volleyball') return '🏐';
+  if (s === 'tennis') return '🎾';
+  return '⚽';
+};
+
 interface MapViewProps {
   currentCity: CityName;
   venues: Venue[];
@@ -178,11 +186,10 @@ export const MapView: React.FC<MapViewProps> = ({
 
     venues.forEach((venue, index) => {
       const isSelected = selectedVenue?.id === venue.id;
-      const ballEmoji = venue.sport === 'football' ? '⚽' : '🏀';
-      const pinSize = isSelected ? 40 : 34;
-      const fontSize = isSelected ? 22 : 18;
-      // Hitbox with 13px+ comfortable padding around the visual pin
-      const hitboxSize = isSelected ? 66 : 60;
+      const pinSize = isSelected ? 42 : 36;
+      const fontSize = isSelected ? 25 : 21;
+      const hitboxSize = isSelected ? 60 : 54;
+      const sportEmoji = getSportIcon(venue.sport);
 
       // Slight offset for venues at the same school/location so both ⚽ and 🏀 are visible side-by-side
       const sameCoordsIndex = venues.filter(
@@ -201,25 +208,43 @@ export const MapView: React.FC<MapViewProps> = ({
           cursor: pointer;
           pointer-events: auto !important;
           touch-action: manipulation;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
         ">
           <div class="custom-map-pin ${isSelected ? 'active' : ''}" style="
             width: ${pinSize}px;
             height: ${pinSize}px;
-            background: #FFFFFF;
-            border: ${isSelected ? '3px solid #00B050' : '2.5px solid #FFFFFF'};
-            border-radius: 50%;
-            box-shadow: ${isSelected ? '0 6px 18px rgba(0, 176, 80, 0.45)' : '0 4px 14px rgba(0, 0, 0, 0.22)'};
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: ${fontSize}px;
-            line-height: 1;
-            cursor: pointer;
+            min-width: ${pinSize}px;
+            min-height: ${pinSize}px;
+            background: #FFFFFF !important;
+            border-radius: 50% !important;
+            border: ${isSelected ? '2.5px solid #00B050' : '1.5px solid #E2E8F0'} !important;
+            box-shadow: ${isSelected ? '0 4px 14px rgba(0, 176, 80, 0.45), 0 2px 6px rgba(0, 0, 0, 0.12)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)'} !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
             transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-            transform: ${isSelected ? 'scale(1.18)' : 'scale(1)'};
             user-select: none;
             pointer-events: auto;
-          ">${ballEmoji}</div>
+          ">
+            <span style="
+              font-size: ${fontSize}px;
+              line-height: 1;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              transform: translateY(-0.5px);
+              pointer-events: none;
+              user-select: none;
+            ">
+              ${sportEmoji}
+            </span>
+          </div>
         </div>
       `;
 

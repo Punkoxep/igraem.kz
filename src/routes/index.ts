@@ -6,7 +6,7 @@ import { LocksController } from '../controllers/locksController';
 import { AdminController } from '../controllers/adminController';
 import { NotificationsController } from '../controllers/notificationsController';
 import { IssuesController } from '../controllers/issuesController';
-import { authenticateJwt, requireAdmin } from '../middlewares/authMiddleware';
+import { authenticateJwt, requireAdmin, requireAdminOrSchool } from '../middlewares/authMiddleware';
 import { validateIIN } from '../utils/iinValidator';
 
 const router = Router();
@@ -25,6 +25,7 @@ router.post('/notifications/test-push', authenticateJwt, NotificationsController
 // --- Auth & User Registration Routes ---
 router.post('/auth/register', AuthController.register as any);
 router.post('/users/register', AuthController.register as any);
+router.post('/auth/google', AuthController.googleAuth as any);
 router.post('/auth/complete-profile', AuthController.completeProfile as any);
 router.post('/auth/login', AuthController.login as any);
 router.post('/auth/forgot-password', AuthController.forgotPassword as any);
@@ -36,6 +37,8 @@ router.post('/user/send-email-verification', authenticateJwt, AuthController.sen
 router.post('/user/verify-email', authenticateJwt, AuthController.verifyEmail as any);
 router.post('/auth/send-email-verification', authenticateJwt, AuthController.sendEmailVerification as any);
 router.post('/auth/verify-email', authenticateJwt, AuthController.verifyEmail as any);
+router.patch('/user/iin', authenticateJwt, AuthController.updateIin as any);
+router.post('/user/iin', authenticateJwt, AuthController.updateIin as any);
 
 // --- IIN Validation Utility Endpoint ---
 router.post('/iin/validate', (req, res) => {
@@ -150,6 +153,8 @@ router.get('/locks/:lockId/status', LocksController.getLockStatus as any);
 router.post('/locks/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/:id/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/bookings/:id/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
+router.post('/ttlock/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
+router.post('/open-door', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-button', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-qr', authenticateJwt, LocksController.unlockByDoorQr as any);
 router.get('/locks/active-access', authenticateJwt, LocksController.getActiveAccess as any);
@@ -157,7 +162,9 @@ router.get('/locks/active-access', authenticateJwt, LocksController.getActiveAcc
 // --- Admin & Gateway Health Monitoring Routes (Strict RBAC Protected) ---
 router.get('/admin/locks/status', authenticateJwt, requireAdmin, LocksController.getLockStatus as any);
 router.get('/admin/locks/:lockId/status', authenticateJwt, requireAdmin, LocksController.getLockStatus as any);
-router.post('/admin/locks/force-unlock', authenticateJwt, requireAdmin, LocksController.forceUnlockByAdmin as any);
+router.post('/admin/locks/force-unlock', authenticateJwt, requireAdminOrSchool, LocksController.forceUnlockByAdmin as any);
+router.post('/ttlock/force-unlock', authenticateJwt, requireAdminOrSchool, LocksController.forceUnlockByAdmin as any);
+router.post('/locks/force-unlock', authenticateJwt, requireAdminOrSchool, LocksController.forceUnlockByAdmin as any);
 router.get('/admin/gateways', authenticateJwt, requireAdmin, AdminController.getGatewayStatus as any);
 router.post('/admin/gateways/toggle', authenticateJwt, requireAdmin, AdminController.toggleGatewayStatus as any);
 router.get('/admin/lock-logs', authenticateJwt, requireAdmin, AdminController.getLockLogs as any);
@@ -174,8 +181,17 @@ router.put('/admin/grounds/:id', authenticateJwt, requireAdmin, GroundsControlle
 router.put('/admin/courts/:id', authenticateJwt, requireAdmin, GroundsController.updateGround as any);
 router.post('/admin/bookings/check-noshows', authenticateJwt, requireAdmin, BookingsController.checkNoShows as any);
 router.get('/admin/bans', authenticateJwt, requireAdmin, AdminController.getBansList as any);
+
+// --- Admin Users Management Endpoints ---
 router.get('/admin/users', authenticateJwt, requireAdmin, AdminController.getUsersList as any);
 router.get('/users', authenticateJwt, requireAdmin, AdminController.getUsersList as any);
+router.patch('/admin/users/:id/status', authenticateJwt, requireAdmin, AdminController.updateUserStatus as any);
+router.post('/admin/users/:id/status', authenticateJwt, requireAdmin, AdminController.updateUserStatus as any);
+router.patch('/admin/users/:id/role', authenticateJwt, requireAdmin, AdminController.updateUserRole as any);
+router.post('/admin/users/:id/role', authenticateJwt, requireAdmin, AdminController.updateUserRole as any);
+router.post('/admin/users/:id/reset-password', authenticateJwt, requireAdmin, AdminController.adminResetPassword as any);
+router.patch('/admin/users/:id/email', authenticateJwt, requireAdmin, AdminController.updateUserEmail as any);
+router.post('/admin/users/:id/email', authenticateJwt, requireAdmin, AdminController.updateUserEmail as any);
 router.post('/admin/users/:userId/ban', authenticateJwt, requireAdmin, AdminController.banUser as any);
 router.post('/admin/users/:userId/unban', authenticateJwt, requireAdmin, AdminController.unbanUser as any);
 

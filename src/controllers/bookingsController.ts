@@ -43,22 +43,69 @@ export class BookingsController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      // Check if user is currently banned for No-Show
-      const dbUser = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (dbUser && dbUser.is_banned && dbUser.banned_until && new Date(dbUser.banned_until) > new Date()) {
-        const bannedUntilStr = new Date(dbUser.banned_until).toLocaleString('ru-RU');
-        return res.status(403).json({
-          success: false,
-          message: `Ваш аккаунт заблокирован за неявку (No-Show) до ${bannedUntilStr}`,
-        });
-      }
-
       const { ground_id, booking_date, start_time, end_time, total_price } = req.body;
 
       if (!ground_id || !booking_date || !start_time || !end_time) {
         return res.status(400).json({
           success: false,
           message: 'Укажите площадка, дату (YYYY-MM-DD), время начала и окончания (HH:mm)',
+        });
+      }
+
+      // Verify ground exists (with resilient lookup)
+      let ground = await prisma.ground.findUnique({ where: { id: ground_id } });
+      if (!ground) {
+        if (ground_id === 'school-11-football' || ground_id.includes('football')) {
+          ground = await prisma.ground.findFirst({ where: { type: 'football' } });
+        } else if (ground_id === 'school-11-basketball' || ground_id.includes('basketball')) {
+          ground = await prisma.ground.findFirst({ where: { type: 'basketball' } });
+        } else {
+          ground = await prisma.ground.findFirst();
+        }
+      }
+      if (!ground) {
+        return res.status(404).json({ success: false, message: 'Площадка не найдена' });
+      }
+      const actualGroundId = ground.id;
+
+      // Check if user has an active booking restriction (global or venue-specific)
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: {
+          userBans: {
+            where: {
+              is_resolved: false,
+              banned_until: { gt: new Date() },
+            },
+            orderBy: { banned_until: 'desc' },
+          },
+        },
+      });
+
+      const activeBan = dbUser?.userBans?.find(
+        (b) => !b.ground_id || b.ground_id === actualGroundId || b.ground_id === ground_id
+      );
+
+      const isUserBanned =
+        Boolean(dbUser?.is_blocked) ||
+        Boolean(dbUser?.is_banned && dbUser.banned_until && new Date(dbUser.banned_until) > new Date()) ||
+        Boolean(activeBan);
+
+      if (isUserBanned) {
+        const blockedUntilDate =
+          activeBan?.banned_until ||
+          dbUser?.banned_until ||
+          new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const reason =
+          activeBan?.reason ||
+          'Неявка или опоздание на забронированное время (нарушение правил площадки)';
+
+        return res.status(403).json({
+          success: false,
+          error: 'BOOKING_BLOCKED',
+          message: 'Бронирование временно недоступно',
+          reason: reason,
+          blocked_until: blockedUntilDate.toISOString(),
         });
       }
 
@@ -90,22 +137,6 @@ export class BookingsController {
           message: 'Время окончания должно быть позже времени начала',
         });
       }
-
-      // Verify ground exists (with resilient lookup)
-      let ground = await prisma.ground.findUnique({ where: { id: ground_id } });
-      if (!ground) {
-        if (ground_id === 'school-11-football' || ground_id.includes('football')) {
-          ground = await prisma.ground.findFirst({ where: { type: 'football' } });
-        } else if (ground_id === 'school-11-basketball' || ground_id.includes('basketball')) {
-          ground = await prisma.ground.findFirst({ where: { type: 'basketball' } });
-        } else {
-          ground = await prisma.ground.findFirst();
-        }
-      }
-      if (!ground) {
-        return res.status(404).json({ success: false, message: 'Площадка не найдена' });
-      }
-      const actualGroundId = ground.id;
 
       // Check School Hours reservation rule with day-of-week selection
       if (ground.is_school_court) {
@@ -2302,16 +2333,22 @@ export class BookingsController {
 
       // Revoke any corresponding JoinRequest for that user on this booking
       if (bookingGuest.user) {
-        await prisma.joinRequest.updateMany({
-          where: {
-            booking_id: bookingId,
-            OR: [
-              { user_iin: bookingGuest.user.iin },
-              { user_phone: bookingGuest.user.phone_number },
-            ],
-          },
-          data: { status: 'REMOVED' },
-        });
+        const userFilters: any[] = [];
+        if (bookingGuest.user.iin) {
+          userFilters.push({ user_iin: bookingGuest.user.iin });
+        }
+        if (bookingGuest.user.phone_number) {
+          userFilters.push({ user_phone: bookingGuest.user.phone_number });
+        }
+        if (userFilters.length > 0) {
+          await prisma.joinRequest.updateMany({
+            where: {
+              booking_id: bookingId,
+              OR: userFilters,
+            },
+            data: { status: 'REMOVED' },
+          });
+        }
       }
 
       return res.json({

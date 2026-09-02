@@ -16,6 +16,7 @@ import { VenueClosedModal } from './components/VenueClosedModal';
 import { UnlockLoadingScreen } from './components/UnlockLoadingScreen';
 import { BannedUserScreen } from './components/BannedUserScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
+import { BookingBlockedModal } from './components/BookingBlockedModal';
 
 import { CityName, SportType, Venue, TimeSlot, Booking, ActiveTab, MyRequestItem, VenueIncomingRequests } from './types';
 import { INITIAL_VENUES } from './data/venuesData';
@@ -24,12 +25,36 @@ import { api, UserProfile } from './services/api';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Auth & Ban state
+  // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(api.getToken()));
-  const [isBanned, setIsBanned] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userPhone, setUserPhone] = useState('');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [bookingBlockedModalData, setBookingBlockedModalData] = useState<{
+    isOpen: boolean;
+    reason?: string | null;
+    blockedUntil?: string | null;
+  }>({ isOpen: false });
+
+  // Global Auth Modal State & Pending Booking Session
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState<{
+    venue: Venue;
+    dateStr: string;
+    slot: TimeSlot;
+  } | null>(null);
+
+  const openAuthModal = useCallback((pending?: { venue: Venue; dateStr: string; slot: TimeSlot }) => {
+    if (pending) {
+      setPendingBooking(pending);
+    }
+    setIsAuthModalOpen(true);
+  }, []);
+
+  const closeAuthModal = useCallback(() => {
+    setIsAuthModalOpen(false);
+    setPendingBooking(null);
+  }, []);
 
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ text, type });
@@ -41,14 +66,34 @@ export const App: React.FC = () => {
   // Dynamic Venues state
   const [venues, setVenues] = useState<Venue[]>(INITIAL_VENUES);
 
-  // i18n Language state
-  const [currentLang, setCurrentLang] = useState<Language>('ru');
+  // i18n Language state (persisted in localStorage)
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('language') as Language;
+      if (saved && (saved === 'ru' || saved === 'kk' || saved === 'en')) {
+        return saved;
+      }
+    }
+    return 'ru';
+  });
+
+  const handleLanguageChange = (lang: Language) => {
+    setCurrentLang(lang);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('language', lang);
+    }
+  };
 
   // Navigation & Location - initialize state from current URL
   const getTabFromLocation = (): ActiveTab => {
     if (typeof window === 'undefined') return 'map';
     const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
     const params = new URLSearchParams(window.location.search);
+
+    const token = api.getToken();
+    if (!token) {
+      return 'map';
+    }
 
     if (path === '/bookings' || path.startsWith('/bookings/') || params.has('id') || params.has('bookingid')) {
       return 'bookings';
@@ -102,6 +147,11 @@ export const App: React.FC = () => {
 
   // Handle Tab changes with URL synchronization (updates browser address bar & history)
   const handleTabChange = useCallback((newTab: ActiveTab, subTab?: 'my' | 'incoming') => {
+    if (newTab !== 'map' && !isAuthenticated) {
+      openAuthModal();
+      return;
+    }
+
     setActiveTab(newTab);
     if (newTab === 'requests') {
       const chosenSubTab = subTab || requestsSubTab;
@@ -120,7 +170,7 @@ export const App: React.FC = () => {
         window.history.pushState({ tab: newTab }, '', targetPath);
       }
     }
-  }, [requestsSubTab]);
+  }, [isAuthenticated, openAuthModal, requestsSubTab]);
 
   // Synchronize on browser Back / Forward buttons & PopState events
   useEffect(() => {
@@ -135,6 +185,17 @@ export const App: React.FC = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Direct URL check on mount for guest
+  useEffect(() => {
+    const token = api.getToken();
+    if (!token && typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+      if (path === '/bookings' || path === '/requests' || path === '/favorites' || path === '/profile') {
+        openAuthModal();
+      }
+    }
+  }, [openAuthModal]);
 
   // Fetch grounds from API
   const fetchGrounds = useCallback(async () => {
@@ -317,6 +378,11 @@ export const App: React.FC = () => {
         });
     }
   }, []);
+
+  // Unconditionally fetch grounds on mount for both guests and authenticated users
+  useEffect(() => {
+    fetchGrounds();
+  }, [fetchGrounds]);
 
   // When authenticated, fetch fresh data and start background polling (every 5 seconds)
   useEffect(() => {
@@ -513,10 +579,18 @@ export const App: React.FC = () => {
     return venues.filter((v) => favoriteIds.includes(v.id));
   }, [venues, favoriteIds]);
 
-  const handleAuthSuccess = (user: UserProfile) => {
+  const handleAuthSuccess = async (user: UserProfile) => {
     setUserProfile(user);
     setUserPhone(user.phone_number || '');
     setIsAuthenticated(true);
+    setIsAuthModalOpen(false);
+
+    // If there was a pending booking, resume and execute it
+    if (pendingBooking) {
+      const pending = pendingBooking;
+      setPendingBooking(null);
+      await handleCreateBooking(pending.venue, pending.dateStr, pending.slot);
+    }
   };
 
   const handleLogout = () => {
@@ -529,9 +603,17 @@ export const App: React.FC = () => {
     setMyRequests([]);
     setOpenedVenueBooking(null);
     setCurrentBookingSuccess(null);
+    setActiveTab('map');
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, document.title, '/');
+    }
   };
 
   const handleToggleFavorite = (venueId: string) => {
+    if (!isAuthenticated) {
+      openAuthModal();
+      return;
+    }
     setFavoriteIds((prev) =>
       prev.includes(venueId) ? prev.filter((id) => id !== venueId) : [...prev, venueId]
     );
@@ -543,6 +625,11 @@ export const App: React.FC = () => {
     dateStr: string,
     slot: TimeSlot
   ) => {
+    if (!isAuthenticated && !api.getToken()) {
+      openAuthModal({ venue, dateStr, slot });
+      return;
+    }
+
     const times = slot.time.split('–').map((t) => t.trim());
     const startTime = times[0] || '18:00';
     const endTime = times[1] || '19:00';
@@ -587,7 +674,15 @@ export const App: React.FC = () => {
         alert(res?.message || 'Не удалось создать бронирование');
       }
     } catch (err: any) {
-      alert(err.message || 'Ошибка бронирования. Проверьте суточный лимит и доступность времени.');
+      if (err.error === 'BOOKING_BLOCKED' || err.data?.error === 'BOOKING_BLOCKED' || err.status === 403) {
+        setBookingBlockedModalData({
+          isOpen: true,
+          reason: err.reason || err.data?.reason,
+          blockedUntil: err.blocked_until || err.data?.blocked_until,
+        });
+      } else {
+        alert(err.message || 'Ошибка бронирования. Проверьте суточный лимит и доступность времени.');
+      }
     }
   };
 
@@ -742,15 +837,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // Screen 1: Unauthenticated -> AuthScreen
-  if (!isAuthenticated) {
-    return (
-      <div className="app-container">
-        <AuthScreen onSuccess={handleAuthSuccess} />
-      </div>
-    );
-  }
-
   // Screen 6: Venue Opened Screen
   if (openedVenueBooking) {
     return (
@@ -776,14 +862,6 @@ export const App: React.FC = () => {
           favoritesCount={favoriteVenues.length}
           currentLang={currentLang}
         />
-      </div>
-    );
-  }
-
-  if (isBanned) {
-    return (
-      <div className="app-container">
-        <BannedUserScreen onUnbanForDemo={() => setIsBanned(false)} />
       </div>
     );
   }
@@ -867,7 +945,7 @@ export const App: React.FC = () => {
               userPhone={userPhone}
               currentCity={currentCity}
               currentLang={currentLang}
-              onSelectLang={setCurrentLang}
+              onSelectLang={handleLanguageChange}
               onLogout={handleLogout}
               onProfileUpdated={(updated) => setUserProfile(updated)}
               bookings={bookings}
@@ -892,10 +970,27 @@ export const App: React.FC = () => {
         venue={selectedVenue}
         userCoords={userCoords}
         userBookings={bookings}
+        userProfile={userProfile}
+        currentLang={currentLang}
         onClose={() => setSelectedVenue(null)}
         onBook={handleCreateBooking}
         isFavorite={selectedVenue ? favoriteIds.includes(selectedVenue.id) : false}
         onToggleFavorite={handleToggleFavorite}
+        onRequireAuth={(pending) => {
+          if (pending) {
+            openAuthModal(pending);
+          } else {
+            openAuthModal();
+          }
+        }}
+      />
+
+      <BookingBlockedModal
+        isOpen={bookingBlockedModalData.isOpen}
+        onClose={() => setBookingBlockedModalData({ isOpen: false })}
+        reason={bookingBlockedModalData.reason}
+        blockedUntil={bookingBlockedModalData.blockedUntil}
+        currentLang={currentLang}
       />
 
       {currentBookingSuccess && (
@@ -933,6 +1028,26 @@ export const App: React.FC = () => {
         favoritesCount={favoriteVenues.length}
         currentLang={currentLang}
       />
+
+      {/* Global Auth Modal Overlay */}
+      {isAuthModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 animate-fade-in"
+          onClick={closeAuthModal}
+        >
+          <div
+            className="w-full max-w-[420px] max-h-[92vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <AuthScreen
+              onSuccess={handleAuthSuccess}
+              onClose={closeAuthModal}
+              currentLang={currentLang}
+              onLanguageChange={handleLanguageChange}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Global Toast Notification */}
       {toastMessage && (

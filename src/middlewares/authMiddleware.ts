@@ -39,3 +39,11 @@ export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: Nex
   }
   next();
 };
+
+export const requireAdminOrSchool = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const role = req.user?.role?.toLowerCase();
+  if (!req.user || (role !== 'admin' && role !== 'superadmin' && role !== 'school' && role !== 'teacher')) {
+    return res.status(403).json({ success: false, message: 'Доступ запрещен: требуются права администратора или школы' });
+  }
+  next();
+};

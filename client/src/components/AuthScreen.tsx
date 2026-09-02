@@ -1,13 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Phone, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2, ShieldCheck, Lock, Eye, EyeOff, KeyRound, User, FileText, UserPlus, CheckSquare, Square, Mail, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  X,
+  Check,
+  Eye,
+  EyeOff,
+  User,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  Mail,
+  ShieldCheck
+} from 'lucide-react';
 import { api, UserProfile } from '../services/api';
-import { Logo } from './Logo';
+import { Language, LANGUAGE_NAMES, translations } from '../i18n/translations';
 
 interface AuthScreenProps {
   onSuccess: (user: UserProfile) => void;
+  onClose?: () => void;
+  currentLang?: Language;
+  onLanguageChange?: (lang: Language) => void;
 }
 
-const MASTER_OTP_CODES = ['1111', '0000', '1234', '7777'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -40,15 +56,41 @@ export const formatKazakhstanPhoneDigits = (raw: string): string => {
   return formatted;
 };
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({
+  onSuccess,
+  onClose,
+  currentLang: currentLangProp,
+  onLanguageChange,
+}) => {
   // Main Screen View: 'login' | 'register' | 'forgot-password'
   const [authView, setAuthView] = useState<'login' | 'register' | 'forgot-password'>('login');
 
-  // Login Mode Tab (within 'login' view): 'password' vs 'sms'
-  const [authMode, setAuthMode] = useState<'password' | 'sms'>('password');
+  // Language Selector State (with localStorage sync)
+  const [internalLang, setInternalLang] = useState<Language>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('language') as Language;
+      if (saved && (saved === 'ru' || saved === 'kk' || saved === 'en')) {
+        return saved;
+      }
+    }
+    return currentLangProp || 'ru';
+  });
 
-  // SMS Flow Steps: 'phone' | 'otp' | 'profile'
-  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
+  const activeLang: Language = currentLangProp || internalLang;
+  const t = translations[activeLang]?.auth || translations.ru.auth;
+
+  const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
+
+  const handleSelectLanguage = (lang: Language) => {
+    setInternalLang(lang);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('language', lang);
+    }
+    if (onLanguageChange) {
+      onLanguageChange(lang);
+    }
+    setIsLangDropdownOpen(false);
+  };
 
   // --- Login State ---
   const [loginPhoneDigits, setLoginPhoneDigits] = useState('');
@@ -59,22 +101,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [regFullName, setRegFullName] = useState('');
   const [regPhoneDigits, setRegPhoneDigits] = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [regIin, setRegIin] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
-  const [agreeToTerms, setAgreeToTerms] = useState(true);
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
 
   // --- Forgot Password State ---
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSentSuccess, setForgotSentSuccess] = useState(false);
-
-  // --- SMS OTP State ---
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
-  const [timerSeconds, setTimerSeconds] = useState(60);
-  const [canResend, setCanResend] = useState(false);
-  const [resendToast, setResendToast] = useState(false);
 
   // Status & Error
   const [loading, setLoading] = useState(false);
@@ -84,24 +119,74 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const fullLoginPhone = `+7 ${formatKazakhstanPhoneDigits(loginPhoneDigits)}`;
   const fullRegPhone = `+7 ${formatKazakhstanPhoneDigits(regPhoneDigits)}`;
 
-  // 60-Second Resend Countdown Timer for OTP
-  useEffect(() => {
-    let interval: any = null;
-    if (authView === 'login' && authMode === 'sms' && step === 'otp' && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => {
-          if (prev <= 1) {
-            setCanResend(true);
-            return 0;
-          }
-          return prev - 1;
+  const GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '93930160138-eop34c99jsjd2ni4uaovoeomgir3ihsq.apps.googleusercontent.com';
+
+  // Google OAuth Popup Trigger
+  const handleGoogleAuthClick = () => {
+    if (typeof window === 'undefined') return;
+
+    // 1. Preferred Token Client (standard Google OAuth account selector popup)
+    if ((window as any).google?.accounts?.oauth2) {
+      try {
+        const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'openid email profile',
+          callback: async (tokenResponse: any) => {
+            if (tokenResponse?.error) {
+              console.warn('Google OAuth cancelled or error:', tokenResponse);
+              return;
+            }
+            if (tokenResponse?.access_token) {
+              setLoading(true);
+              setErrorMsg('');
+              try {
+                const res = await api.googleAuth(tokenResponse.access_token);
+                if (res && res.success && res.data?.user) {
+                  onSuccess(res.data.user);
+                } else {
+                  setErrorMsg(res.message || t.loginError);
+                }
+              } catch (err: any) {
+                setErrorMsg(err.message || t.loginError);
+              } finally {
+                setLoading(false);
+              }
+            }
+          },
         });
-      }, 1000);
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        return;
+      } catch (e) {
+        console.warn('OAuth2 TokenClient init error:', e);
+      }
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [authView, authMode, step, timerSeconds]);
+
+    // 2. Fallback to Google ID client prompt
+    if ((window as any).google?.accounts?.id) {
+      (window as any).google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        auto_select: false,
+        callback: async (response: any) => {
+          if (!response || !response.credential) return;
+          setLoading(true);
+          setErrorMsg('');
+          try {
+            const res = await api.googleAuth(response.credential);
+            if (res && res.success && res.data?.user) {
+              onSuccess(res.data.user);
+            } else {
+              setErrorMsg(res.message || t.loginError);
+            }
+          } catch (err: any) {
+            setErrorMsg(err.message || t.loginError);
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
+      (window as any).google.accounts.id.prompt();
+    }
+  };
 
   // Generic phone input handler (extracts 10 clean subscriber digits)
   const handlePhoneInputChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
@@ -118,17 +203,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     setter(clean10);
   };
 
-  // ==========================================
-  // 1. PASSWORD LOGIN SUBMISSION (POST /auth/login)
-  // ==========================================
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loginPhoneDigits.length < 10) {
-      setErrorMsg('Введите полный 10-значный номер телефона');
+      setErrorMsg(t.enterFullPhone);
       return;
     }
     if (!loginPassword.trim()) {
-      setErrorMsg('Введите пароль');
+      setErrorMsg(t.enterPassword);
       return;
     }
 
@@ -141,46 +223,39 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       if (res && res.success && res.data?.user) {
         onSuccess(res.data.user);
       } else {
-        setErrorMsg(res.message || 'Неверный номер телефона или пароль');
+        setErrorMsg(res.message || t.loginError);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Ошибка входа в систему. Проверьте правильность данных.');
+      setErrorMsg(err.message || t.loginError);
     } finally {
       setLoading(false);
     }
   };
 
-  // ==========================================
-  // 2. REGISTRATION SUBMISSION (POST /auth/register)
-  // ==========================================
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regFullName.trim()) {
-      setErrorMsg('Укажите ваше имя и фамилию (ФИО)');
-      return;
-    }
     if (regPhoneDigits.length < 10) {
-      setErrorMsg('Введите полный номер телефона (10 цифр)');
+      setErrorMsg(t.enterFullPhone);
       return;
     }
     if (!regEmail.trim() || !EMAIL_REGEX.test(regEmail.trim())) {
-      setErrorMsg('Укажите корректный адрес электронной почты (например, user@example.kz)');
+      setErrorMsg(t.invalidEmail);
       return;
     }
-    if (regIin.length < 12) {
-      setErrorMsg('ИИН должен состоять из 12 цифр');
+    if (!regFullName.trim()) {
+      setErrorMsg(t.fullNameLabel);
       return;
     }
     if (regPassword.length < 6) {
-      setErrorMsg('Пароль должен быть длиной не менее 6 символов');
+      setErrorMsg(t.passwordMinLength);
       return;
     }
     if (regPassword !== regConfirmPassword) {
-      setErrorMsg('Введенные пароли не совпадают');
+      setErrorMsg(t.passwordsDoNotMatch);
       return;
     }
     if (!agreeToTerms) {
-      setErrorMsg('Необходимо согласиться с правилами сервиса');
+      setErrorMsg(t.mustAgreeTerms);
       return;
     }
 
@@ -193,7 +268,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         full_name: regFullName.trim(),
         phone: fullRegPhone,
         email: regEmail.trim().toLowerCase(),
-        iin: regIin.trim(),
         password: regPassword.trim(),
         confirmPassword: regConfirmPassword.trim(),
       });
@@ -201,22 +275,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       if (res && res.success && res.data?.user) {
         onSuccess(res.data.user);
       } else {
-        setErrorMsg(res.message || 'Ошибка при регистрации');
+        setErrorMsg(res.message || t.regError);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Ошибка при регистрации. Проверьте правильность введенных данных.');
+      setErrorMsg(err.message || t.regError);
     } finally {
       setLoading(false);
     }
   };
 
-  // ==========================================
-  // 3. FORGOT PASSWORD (POST /auth/forgot-password)
-  // ==========================================
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim() || !EMAIL_REGEX.test(forgotEmail.trim())) {
-      setErrorMsg('Введите корректный адрес электронной почты');
+      setErrorMsg(t.invalidEmail);
       return;
     }
 
@@ -225,90 +296,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     setLoading(true);
 
     try {
-      const res = await api.forgotPassword(forgotEmail.trim().toLowerCase());
+      await api.forgotPassword(forgotEmail.trim().toLowerCase());
       setForgotSentSuccess(true);
-      setSuccessMsg(res.message || 'Если такой email зарегистрирован, ссылка отправлена на почту.');
+      setSuccessMsg('');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Ошибка отправки запроса на сброс пароля');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==========================================
-  // 4. SMS FLOW HANDLERS
-  // ==========================================
-  const handleRequestSmsCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loginPhoneDigits.length < 10) {
-      setErrorMsg('Введите полный 10-значный номер телефона');
-      return;
-    }
-    setErrorMsg('');
-    setStep('otp');
-    setTimerSeconds(60);
-    setCanResend(false);
-    setOtpDigits(['', '', '', '']);
-  };
-
-  const handleResendSmsCode = () => {
-    if (!canResend) return;
-    setTimerSeconds(60);
-    setCanResend(false);
-    setOtpDigits(['', '', '', '']);
-    setErrorMsg('');
-    setResendToast(true);
-    setTimeout(() => setResendToast(false), 2500);
-  };
-
-  const handleOtpChange = (val: string, idx: number) => {
-    const digit = val.replace(/\D/g, '').slice(-1);
-    const newOtp = [...otpDigits];
-    newOtp[idx] = digit;
-    setOtpDigits(newOtp);
-
-    if (digit && idx < 3) {
-      const nextInput = document.getElementById(`otp-input-${idx + 1}`);
-      nextInput?.focus();
-    }
-
-    if (newOtp.every((d) => d !== '')) {
-      handleVerifyOtp(newOtp.join(''));
-    }
-  };
-
-  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
-    if (e.key === 'Backspace' && !otpDigits[idx] && idx > 0) {
-      const prevInput = document.getElementById(`otp-input-${idx - 1}`);
-      prevInput?.focus();
-    }
-  };
-
-  const handleVerifyOtp = async (codeToVerify?: string) => {
-    const code = codeToVerify || otpDigits.join('');
-    setErrorMsg('');
-    setLoading(true);
-
-    const isValidCode = MASTER_OTP_CODES.includes(code) || code.length === 4;
-    if (!isValidCode) {
-      setErrorMsg('Неверный SMS код подтверждения');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const loginAttempt = await api.login(fullLoginPhone, 'password123').catch(() => null);
-      if (loginAttempt && loginAttempt.success && loginAttempt.data?.user) {
-        onSuccess(loginAttempt.data.user);
-        return;
-      }
-
-      // If user not in DB, move to register view with pre-filled phone!
-      setRegPhoneDigits(loginPhoneDigits);
-      setAuthView('register');
-    } catch (err: any) {
-      setRegPhoneDigits(loginPhoneDigits);
-      setAuthView('register');
+      setErrorMsg(err.message || t.regError);
     } finally {
       setLoading(false);
     }
@@ -316,35 +308,85 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
   return (
     <div className="flex-1 flex flex-col justify-between p-6 bg-white text-slate-900 w-full relative overflow-y-auto min-h-full">
-      <div className="pt-2">
-        {/* Header Bar with Logo */}
-        <div className="mb-5 flex items-center justify-between">
-          <Logo size="lg" />
-          {authView === 'login' && authMode === 'sms' && step === 'otp' && (
+      <div className="pt-1">
+        {/* ======================================================== */}
+        {/* TOP HEADER: 3-Column Layout (Back | Language | Close)    */}
+        {/* ======================================================== */}
+        <div className="mb-6 flex items-center justify-between relative w-full">
+          {/* Left: Round Back button (Chevron only) or empty placeholder */}
+          <div className="w-9 h-9 flex items-center justify-start shrink-0">
+            {authView !== 'login' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthView('login');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                  setForgotSentSuccess(false);
+                }}
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-slate-700 hover:text-slate-900 transition cursor-pointer"
+                title={t.backBtn || 'Назад'}
+              >
+                <ChevronLeft className="w-5 h-5 text-slate-700" />
+              </button>
+            ) : (
+              <div className="w-9 h-9" />
+            )}
+          </div>
+
+          {/* Center: Language Switcher Dropdown (Strictly Centered) */}
+          <div className="relative flex justify-center">
             <button
               type="button"
-              onClick={() => setStep('phone')}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
+              onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer select-none"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Изменить номер</span>
+              <span>{LANGUAGE_NAMES[activeLang] || 'Русский'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isLangDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-          )}
-          {(authView === 'register' || authView === 'forgot-password') && (
-            <button
-              type="button"
-              onClick={() => {
-                setAuthView('login');
-                setErrorMsg('');
-                setSuccessMsg('');
-                setForgotSentSuccess(false);
-              }}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>К авторизации</span>
-            </button>
-          )}
+
+            {isLangDropdownOpen && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-32 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-30 animate-fade-in">
+                <button
+                  type="button"
+                  onClick={() => handleSelectLanguage('ru')}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${activeLang === 'ru' ? 'text-[#00B050] bg-[#E8F8F0] font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+                >
+                  Русский
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectLanguage('kk')}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${activeLang === 'kk' ? 'text-[#00B050] bg-[#E8F8F0] font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+                >
+                  Қазақша
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectLanguage('en')}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${activeLang === 'en' ? 'text-[#00B050] bg-[#E8F8F0] font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+                >
+                  English
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Close Button ✕ (Always present if onClose is provided) */}
+          <div className="w-9 h-9 flex items-center justify-end shrink-0">
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                title={t.close || 'Закрыть'}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            ) : (
+              <div className="w-9 h-9" />
+            )}
+          </div>
         </div>
 
         {/* Global Error Banner */}
@@ -356,415 +398,282 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         )}
 
         {/* Global Success Banner */}
-        {successMsg && (
-          <div className="mb-4 p-3.5 bg-[#E8F8F0] border border-[#00B050]/30 rounded-2xl text-xs font-semibold text-[#00B050] animate-fade-in flex items-start gap-2">
+        {successMsg && !forgotSentSuccess && (
+          <div className="mb-4 p-3.5 bg-[#E8F8F0] border border-[#00B050]/30 rounded-2xl text-xs font-bold text-[#00B050] animate-fade-in flex items-start gap-2">
             <CheckCircle2 className="w-4 h-4 text-[#00B050] shrink-0 mt-0.5" />
             <span>{successMsg}</span>
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 1: LOGIN (Авторизация / Вход)                       */}
+        {/* VIEW 1: LOGIN                                            */}
         {/* ======================================================== */}
         {authView === 'login' && (
           <div className="animate-fade-in">
-            {/* Mode Switch Tabs (Password vs SMS) */}
-            <div className="flex items-center p-1 bg-slate-100 rounded-2xl mb-5 select-none border border-slate-200/80">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('password');
-                  setErrorMsg('');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  authMode === 'password'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <KeyRound className="w-3.5 h-3.5 text-[#00B050]" />
-                <span>Вход по паролю</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('sms');
-                  setStep('phone');
-                  setErrorMsg('');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  authMode === 'sms'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Phone className="w-3.5 h-3.5 text-[#00B050]" />
-                <span>Вход по SMS</span>
-              </button>
+            {/* Header Title */}
+            <div className="mb-6 text-center">
+              <h1 className="text-2xl font-black text-[#0F172A] tracking-tight mb-1">
+                {t.title}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {t.subtitle}
+              </p>
             </div>
 
-            {/* TAB A: PASSWORD LOGIN */}
-            {authMode === 'password' && (
+            {/* Login Form */}
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
+              {/* Phone Input */}
               <div>
-                <div className="mb-5">
-                  <h1 className="text-2xl font-bold text-slate-900 mb-1">Авторизация</h1>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Введите номер телефона и пароль от вашего аккаунта
-                  </p>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  {t.phoneLabel}
+                </label>
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl overflow-hidden transition-all shadow-xs">
+                  <div className="flex items-center gap-1.5 px-3.5 py-3.5 bg-slate-50 border-r border-slate-200 shrink-0 select-none">
+                    <span className="text-lg leading-none">🇰🇿</span>
+                    <span className="text-sm font-bold text-slate-800">+7</span>
+                  </div>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={formatKazakhstanPhoneDigits(loginPhoneDigits)}
+                    onChange={(e) => handlePhoneInputChange(e, setLoginPhoneDigits)}
+                    placeholder="(771) 000-00-00"
+                    required
+                    autoFocus
+                    className="w-full py-3.5 px-3 text-slate-900 font-semibold text-sm outline-none font-mono placeholder:text-slate-400 placeholder:font-normal"
+                  />
                 </div>
-
-                <form onSubmit={handlePasswordLogin} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                      Номер телефона (Казахстан)
-                    </label>
-                    <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl overflow-hidden transition-all shadow-xs">
-                      <div className="flex items-center gap-1 px-3 py-3.5 bg-slate-100/80 border-r border-slate-200 shrink-0 select-none">
-                        <span className="text-base leading-none">🇰🇿</span>
-                        <span className="text-xs font-extrabold text-slate-800">+7</span>
-                      </div>
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        value={formatKazakhstanPhoneDigits(loginPhoneDigits)}
-                        onChange={(e) => handlePhoneInputChange(e, setLoginPhoneDigits)}
-                        placeholder="(771) 000-00-00"
-                        required
-                        autoFocus
-                        className="w-full bg-transparent py-3.5 px-3 text-slate-900 font-bold text-sm outline-none tracking-wide font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-600 block">
-                        Пароль
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthView('forgot-password');
-                          setErrorMsg('');
-                          setSuccessMsg('');
-                          setForgotSentSuccess(false);
-                          setForgotEmail('');
-                        }}
-                        className="text-xs font-bold text-[#00B050] hover:underline cursor-pointer"
-                      >
-                        Забыли пароль?
-                      </button>
-                    </div>
-                    <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3.5 transition-all shadow-xs">
-                      <Lock className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                      <input
-                        type={showLoginPassword ? 'text' : 'password'}
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="Введите пароль"
-                        required
-                        className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowLoginPassword(!showLoginPassword)}
-                        className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                      >
-                        {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading || loginPhoneDigits.length < 10 || !loginPassword.trim()}
-                    className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-5 cursor-pointer"
-                  >
-                    {loading ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      <>
-                        <span>Войти в систему</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </form>
               </div>
-            )}
 
-            {/* TAB B: SMS LOGIN STEP 1 */}
-            {authMode === 'sms' && step === 'phone' && (
+              {/* Password Input */}
               <div>
-                <div className="mb-5">
-                  <h1 className="text-2xl font-bold text-slate-900 mb-1">Вход по SMS</h1>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Введите номер телефона для получения 4-значного кода подтверждения
-                  </p>
-                </div>
-
-                <form onSubmit={handleRequestSmsCode} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                      Номер телефона (Казахстан)
-                    </label>
-                    <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl overflow-hidden transition-all shadow-xs">
-                      <div className="flex items-center gap-1 px-3 py-3.5 bg-slate-100/80 border-r border-slate-200 shrink-0 select-none">
-                        <span className="text-base leading-none">🇰🇿</span>
-                        <span className="text-xs font-extrabold text-slate-800">+7</span>
-                      </div>
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        value={formatKazakhstanPhoneDigits(loginPhoneDigits)}
-                        onChange={(e) => handlePhoneInputChange(e, setLoginPhoneDigits)}
-                        placeholder="(771) 000-00-00"
-                        required
-                        autoFocus
-                        className="w-full bg-transparent py-3.5 px-3 text-slate-900 font-bold text-sm outline-none tracking-wide font-mono"
-                      />
-                    </div>
-                  </div>
-
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  {t.passwordLabel}
+                </label>
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3.5 transition-all shadow-xs">
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder={t.passwordPlaceholder}
+                    required
+                    className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
+                  />
                   <button
-                    type="submit"
-                    disabled={loading || loginPhoneDigits.length < 10}
-                    className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-5 cursor-pointer"
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
-                    <span>Получить SMS код</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </form>
+                </div>
               </div>
-            )}
 
-            {/* TAB B: SMS LOGIN STEP 2 (OTP) */}
-            {authMode === 'sms' && step === 'otp' && (
-              <div className="text-center space-y-4 pt-1">
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900 mb-1">Код из SMS</h1>
-                  <p className="text-xs text-slate-500 max-w-[290px] mx-auto leading-relaxed">
-                    Введите код подтверждения для номера{' '}
-                    <span className="font-bold text-slate-900 block mt-0.5">{fullLoginPhone}</span>
-                  </p>
-                </div>
-
-                {resendToast && (
-                  <div className="p-3 bg-[#E8F8F0] border border-[#00B050]/30 text-[#00B050] text-xs font-bold rounded-2xl animate-fade-in flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Новый код отправлен</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-center gap-3 py-3">
-                  {otpDigits.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      id={`otp-input-${idx}`}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(e.target.value, idx)}
-                      onKeyDown={(e) => handleOtpKeyDown(e, idx)}
-                      autoFocus={idx === 0}
-                      className={`w-13 h-14 text-center font-black text-2xl rounded-2xl border-2 transition-all outline-none ${
-                        digit
-                          ? 'border-[#00B050] bg-[#E8F8F0]/30 text-slate-900 shadow-xs'
-                          : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-[#00B050] focus:bg-white'
-                      }`}
-                    />
-                  ))}
-                </div>
-
-                <div>
-                  {canResend ? (
-                    <button
-                      type="button"
-                      onClick={handleResendSmsCode}
-                      className="text-xs font-bold text-[#00B050] hover:underline flex items-center justify-center gap-1.5 mx-auto py-1.5 px-3 rounded-xl hover:bg-[#E8F8F0]/50 transition-all cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Отправить код повторно</span>
-                    </button>
-                  ) : (
-                    <p className="text-xs text-slate-400 font-medium">
-                      Отправить код повторно через{' '}
-                      <span className="font-bold text-slate-700 font-mono">
-                        0:{timerSeconds < 10 ? `0${timerSeconds}` : timerSeconds}
-                      </span>
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={loading || otpDigits.some((d) => !d)}
-                  onClick={() => handleVerifyOtp()}
-                  className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <span>Подтвердить код</span>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Bottom Switch: «Нет аккаунта? Зарегистрироваться» */}
-            <div className="mt-8 pt-5 border-t border-slate-100 text-center">
-              <p className="text-xs text-slate-500">
-                Нет аккаунта в igraem.kz?{' '}
+              {/* «Forgot password?» strictly UNDER password field, centered */}
+              <div className="text-center pt-0.5">
                 <button
                   type="button"
                   onClick={() => {
-                    setAuthView('register');
+                    setAuthView('forgot-password');
                     setErrorMsg('');
                     setSuccessMsg('');
+                    setForgotSentSuccess(false);
                   }}
-                  className="text-[#00B050] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-xs text-[#00B050] hover:text-[#009644] font-medium hover:underline cursor-pointer transition-colors"
                 >
-                  <span>Зарегистрироваться</span>
-                  <UserPlus className="w-3.5 h-3.5" />
+                  {t.forgotPassword}
                 </button>
-              </p>
+              </div>
+
+              {/* Primary Action Button */}
+              <button
+                type="submit"
+                disabled={loading || loginPhoneDigits.length < 10 || !loginPassword.trim()}
+                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-3 cursor-pointer"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>{t.submitButton}</span>
+                )}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-5 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-3 text-slate-400 font-medium">{t.orDivider}</span>
+              </div>
+            </div>
+
+            {/* Google Circular Button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleGoogleAuthClick}
+                disabled={loading}
+                title={t.googleAuthTitle}
+                className="w-12 h-12 rounded-full bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 hover:border-slate-300 flex items-center justify-center shadow-xs hover:shadow-sm transition-all cursor-pointer select-none"
+              >
+                <svg className="w-6 h-6" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.26 21.36 7.34 24 12 24z"/>
+                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.16 0 9.97 0 12s.46 3.84 1.26 5.42l4.02-3.15z"/>
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Bottom Registration Block */}
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+              <p className="text-sm text-gray-500 mb-3">{t.notRegisteredText}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthView('register');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="w-full h-12 bg-[#E6F6EC] hover:bg-[#DCF3E5] active:bg-[#CDEED9] active:scale-[0.99] text-[#00A859] font-bold text-base rounded-xl flex items-center justify-center transition-all cursor-pointer select-none"
+              >
+                {t.registerButton}
+              </button>
             </div>
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 2: FORGOT PASSWORD (Восстановление пароля)          */}
+        {/* VIEW 2: FORGOT PASSWORD                                  */}
         {/* ======================================================== */}
         {authView === 'forgot-password' && (
           <div className="animate-fade-in">
-            <div className="mb-5">
-              <h1 className="text-2xl font-bold text-slate-900 mb-1">Восстановление пароля</h1>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Введите адрес электронной почты, указанный при регистрации. Мы вышлем ссылку для установки нового пароля.
-              </p>
-            </div>
-
             {forgotSentSuccess ? (
-              <div className="text-center py-5 space-y-4">
-                <div className="w-14 h-14 bg-[#E8F8F0] border border-[#00B050]/30 rounded-full flex items-center justify-center mx-auto text-[#00B050]">
-                  <Mail className="w-7 h-7" />
+              <div className="text-center py-6 space-y-5 animate-fade-in">
+                {/* Success Checkmark Circle Badge */}
+                <div className="w-16 h-16 bg-[#E8F8F0] border-2 border-[#00B050]/20 rounded-full flex items-center justify-center mx-auto text-[#00B050] shadow-sm">
+                  <Check className="w-8 h-8 stroke-[2.5px]" />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-base font-bold text-slate-900">Письмо отправлено</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Если адрес <span className="font-semibold text-slate-800">{forgotEmail}</span> зарегистрирован, ссылка для сброса пароля отправлена. Проверьте почту (включая папку «Спам»).
+
+                {/* Title & Dynamic Email */}
+                <div className="space-y-2">
+                  <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">
+                    {t.letterSent}
+                  </h1>
+                  <p className="text-sm font-bold text-slate-700 break-all px-2">
+                    {forgotEmail}
                   </p>
                 </div>
+
+                {/* Full Width Close Button */}
                 <button
                   type="button"
                   onClick={() => {
+                    if (onClose) {
+                      onClose();
+                    }
                     setAuthView('login');
                     setErrorMsg('');
                     setSuccessMsg('');
                     setForgotSentSuccess(false);
                   }}
-                  className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-2xl transition-all text-sm mt-4 cursor-pointer"
+                  className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl transition-all text-base mt-6 cursor-pointer shadow-md shadow-[#00B050]/20"
                 >
-                  Вернуться ко входу
+                  {t.backToLoginBtn || t.close || 'Закрыть'}
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                    Email (Электронная почта)
-                  </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3.5 transition-all shadow-xs">
-                    <Mail className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
-                    <input
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="user@example.kz"
-                      required
-                      autoFocus
-                      className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
-                    />
-                  </div>
+              <>
+                <div className="mb-6 text-center">
+                  <h1 className="text-2xl font-black text-[#0F172A] tracking-tight mb-1">
+                    {t.forgotTitle}
+                  </h1>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {t.forgotSubtitle}
+                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loading || !forgotEmail.trim()}
-                  className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-5 cursor-pointer"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <span>Отправить ссылку</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
+                <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                      {t.emailLabel}
+                    </label>
+                    <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3.5 transition-all shadow-xs">
+                      <Mail className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
+                      <input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder={t.emailPlaceholder}
+                        required
+                        autoFocus
+                        className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
+                  </div>
 
-            <div className="mt-8 pt-5 border-t border-slate-100 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthView('login');
-                  setErrorMsg('');
-                  setSuccessMsg('');
-                  setForgotSentSuccess(false);
-                }}
-                className="text-xs font-bold text-[#00B050] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Вернуться к авторизации</span>
-              </button>
-            </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !forgotEmail.trim()}
+                    className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-5 cursor-pointer"
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <span>{t.sendLinkButton}</span>
+                    )}
+                  </button>
+                </form>
+
+                <div className="mt-8 pt-5 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthView('login');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                      setForgotSentSuccess(false);
+                    }}
+                    className="text-xs font-medium text-[#00B050] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>{t.backToLogin}</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 3: REGISTRATION FORM (Регистрация)                   */}
+        {/* ======================================================== */}
+        {/* VIEW 3: REGISTRATION                                     */}
         {/* ======================================================== */}
         {authView === 'register' && (
           <div className="animate-fade-in">
-            <div className="mb-5">
-              <h1 className="text-2xl font-bold text-slate-900 mb-1">Регистрация</h1>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Создайте аккаунт для бронирования площадок и участия в матчах
-              </p>
+            <div className="mb-5 text-center">
+              <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">
+                {t.regTitle}
+              </h1>
+              {t.regSubtitle && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {t.regSubtitle}
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              {/* 1. Full Name */}
+              {/* 1. Phone Number */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Имя и Фамилия (ФИО)
+                  {t.phoneLabel}
                 </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
-                  <User className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                  <input
-                    type="text"
-                    value={regFullName}
-                    onChange={(e) => setRegFullName(e.target.value)}
-                    placeholder="Арман Аскаров"
-                    required
-                    autoFocus
-                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* 2. Phone Number */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Номер телефона (Казахстан)
-                </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl overflow-hidden transition-all shadow-xs">
-                  <div className="flex items-center gap-1 px-3 py-3 bg-slate-100/80 border-r border-slate-200 shrink-0 select-none">
-                    <span className="text-base leading-none">🇰🇿</span>
-                    <span className="text-xs font-extrabold text-slate-800">+7</span>
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl overflow-hidden transition-all shadow-xs">
+                  <div className="flex items-center gap-1.5 px-3.5 py-3 bg-slate-50 border-r border-slate-200 shrink-0 select-none">
+                    <span className="text-lg leading-none">🇰🇿</span>
+                    <span className="text-sm font-bold text-slate-800">+7</span>
                   </div>
                   <input
                     type="tel"
@@ -773,63 +682,61 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     onChange={(e) => handlePhoneInputChange(e, setRegPhoneDigits)}
                     placeholder="(771) 000-00-00"
                     required
-                    className="w-full bg-transparent py-3 px-3 text-slate-900 font-bold text-sm outline-none tracking-wide font-mono"
+                    autoFocus
+                    className="w-full bg-transparent py-3 px-3 text-slate-900 font-semibold text-sm outline-none font-mono placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
               </div>
 
-              {/* 3. Email (Электронная почта) */}
+              {/* 2. Email */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Email (Электронная почта)
+                  {t.emailLabel}
                 </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3 transition-all shadow-xs">
                   <Mail className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
                   <input
                     type="email"
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="user@example.kz"
+                    placeholder={t.emailPlaceholder}
                     required
-                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
+                    className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
               </div>
 
-              {/* 4. IIN */}
+              {/* 3. Full Name */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  ИИН (12 цифр)
+                  {t.fullNameLabel}
                 </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
-                  <FileText className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3 transition-all shadow-xs">
+                  <User className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
                   <input
                     type="text"
-                    inputMode="numeric"
-                    maxLength={12}
-                    value={regIin}
-                    onChange={(e) => setRegIin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="990101300123"
+                    value={regFullName}
+                    onChange={(e) => setRegFullName(e.target.value)}
+                    placeholder={t.fullNamePlaceholder}
                     required
-                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none tracking-widest font-mono"
+                    className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
               </div>
 
-              {/* 5. Password */}
+              {/* 4. Password */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Пароль
+                  {t.passwordLabel}
                 </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
-                  <Lock className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3 transition-all shadow-xs">
                   <input
                     type={showRegPassword ? 'text' : 'password'}
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Минимум 6 символов"
+                    placeholder={t.regPasswordPlaceholder}
                     required
-                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
+                    className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
                   />
                   <button
                     type="button"
@@ -841,20 +748,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 </div>
               </div>
 
-              {/* 6. Confirm Password */}
+              {/* 5. Confirm Password */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Подтверждение пароля
+                  {t.confirmPasswordLabel}
                 </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
-                  <Lock className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                <div className="flex items-center bg-white border border-slate-300 focus-within:border-[#00B050] focus-within:ring-1 focus-within:ring-[#00B050] rounded-xl px-3.5 py-3 transition-all shadow-xs">
                   <input
                     type={showRegConfirmPassword ? 'text' : 'password'}
                     value={regConfirmPassword}
                     onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    placeholder="Повторите пароль"
+                    placeholder={t.confirmPasswordPlaceholder}
                     required
-                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
+                    className="w-full bg-transparent text-slate-900 font-semibold text-sm outline-none placeholder:text-slate-400 placeholder:font-normal"
                   />
                   <button
                     type="button"
@@ -866,65 +772,101 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 </div>
               </div>
 
-              {/* 7. Terms Checkbox */}
-              <div
+              {/* 6. Terms Checkbox */}
+              <label
                 onClick={() => setAgreeToTerms(!agreeToTerms)}
-                className="flex items-start gap-2.5 pt-1 select-none cursor-pointer"
+                className="flex items-start gap-3 pt-1 select-none cursor-pointer group"
               >
-                <div className="mt-0.5 text-[#00B050]">
-                  {agreeToTerms ? (
-                    <CheckSquare className="w-4 h-4 fill-[#E8F8F0]" />
-                  ) : (
-                    <Square className="w-4 h-4 text-slate-400" />
+                <div
+                  className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
+                    agreeToTerms
+                      ? 'bg-[#00A859] border-2 border-[#00A859] shadow-xs'
+                      : 'bg-white border-2 border-slate-300 group-hover:border-[#00A859]'
+                  }`}
+                >
+                  {agreeToTerms && (
+                    <Check className="w-3.5 h-3.5 text-white stroke-[3px] animate-fade-in" />
                   )}
                 </div>
-                <span className="text-[11px] text-slate-600 leading-snug">
-                  Я согласен с <span className="text-[#00B050] font-semibold underline">правилами сервиса</span> и обработкой персональных данных
+                <span className="text-xs text-slate-600 leading-snug">
+                  {t.agreeTerms}{' '}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="text-[#00A859] font-semibold underline hover:text-[#008f4c]"
+                  >
+                    {t.termsLink}
+                  </span>{' '}
+                  {t.agreeTermsEnd}
                 </span>
-              </div>
+              </label>
 
+              {/* Primary Action Button */}
               <button
                 type="submit"
-                disabled={loading || !regFullName || regPhoneDigits.length < 10 || !regEmail || regIin.length < 12 || !regPassword || !agreeToTerms}
-                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
+                disabled={loading || !regFullName.trim() || regPhoneDigits.length < 10 || !regEmail.trim() || !regPassword || !regConfirmPassword || !agreeToTerms}
+                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  <>
-                    <span>Зарегистрироваться</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
+                  <span>{t.registerButton}</span>
                 )}
               </button>
             </form>
 
-            {/* Bottom Switch: «Уже есть аккаунт? Войти» */}
-            <div className="mt-6 pt-4 border-t border-slate-100 text-center">
-              <p className="text-xs text-slate-500">
-                Уже есть зарегистрированный аккаунт?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthView('login');
-                    setErrorMsg('');
-                    setSuccessMsg('');
-                  }}
-                  className="text-[#00B050] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Войти</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </p>
+            {/* Divider */}
+            <div className="relative my-5 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-3 text-slate-400 font-medium">{t.orRegisterDivider || t.orDivider}</span>
+              </div>
+            </div>
+
+            {/* Google Circular Button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleGoogleAuthClick}
+                disabled={loading}
+                title={t.googleAuthTitle}
+                className="w-12 h-12 rounded-full bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 hover:border-slate-300 flex items-center justify-center shadow-xs hover:shadow-sm transition-all cursor-pointer select-none"
+              >
+                <svg className="w-6 h-6" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.26 21.36 7.34 24 12 24z"/>
+                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.16 0 9.97 0 12s.46 3.84 1.26 5.42l4.02-3.15z"/>
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Bottom Login Switch Block */}
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+              <p className="text-sm text-gray-500 mb-3">{t.alreadyRegisteredText}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthView('login');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="w-full h-12 bg-[#E6F6EC] hover:bg-[#DCF3E5] active:bg-[#CDEED9] active:scale-[0.99] text-[#00A859] font-bold text-base rounded-xl flex items-center justify-center transition-all cursor-pointer select-none"
+              >
+                {t.loginLinkButton}
+              </button>
             </div>
           </div>
         )}
       </div>
 
       {/* Footer Security Badge */}
-      <div className="pb-2 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-400 text-xs font-medium">
+      <div className="pb-1 pt-6 border-t border-slate-100 flex items-center justify-center gap-1.5 text-slate-400 text-xs font-medium">
         <ShieldCheck className="w-4 h-4 text-[#00B050]" />
-        <span>Защищено igraem.kz API • JWT Session</span>
+        <span>{t.protectedBadge}</span>
       </div>
     </div>
   );

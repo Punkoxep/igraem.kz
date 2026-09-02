@@ -230,14 +230,14 @@ export const DateFilterModal: React.FC<DateFilterModalProps> = ({
                   key={slot}
                   type="button"
                   onClick={() => toggleSlot(slot)}
-                  className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs font-semibold transition-all ${
+                  className={`relative p-2.5 px-2 rounded-2xl border flex items-center justify-center text-xs font-semibold transition-all ${
                     isSelected
                       ? 'bg-[#E8F8F0] border-[#00B050] text-[#00B050] font-bold shadow-xs'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <span>{slot}</span>
-                  {isSelected && <Check className="w-4 h-4 text-[#00B050]" />}
+                  <span className="whitespace-nowrap text-center">{slot}</span>
+                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5px] text-[#00B050] absolute right-[2px] top-1/2 -translate-y-1/2" />}
                 </button>
               );
             })}

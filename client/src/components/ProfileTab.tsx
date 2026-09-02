@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   User as UserIcon,
   Phone,
@@ -18,7 +18,8 @@ import {
   ArrowRight,
   Plus,
   Pencil,
-  Bell
+  Bell,
+  FileText
 } from 'lucide-react';
 import { CityName, Venue } from '../types';
 import { Language, LANGUAGE_NAMES, translations } from '../i18n/translations';
@@ -70,6 +71,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
   const [localEmail, setLocalEmail] = useState<string>(userProfile?.email || '');
+
+  // IIN Binding State & Modal
+  const [isIinModalOpen, setIsIinModalOpen] = useState(false);
+  const [iinInput, setIinInput] = useState('');
+  const [iinLoading, setIinLoading] = useState(false);
+  const [iinError, setIinError] = useState('');
 
   // Admin Force Unlock Modal & Toast State
   const [isForceUnlockModalOpen, setIsForceUnlockModalOpen] = useState(false);
@@ -253,12 +260,89 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     }
   };
 
+  const handleOpenIinModal = () => {
+    setIsIinModalOpen(true);
+    setIinInput(userProfile?.iin || '');
+    setIinError('');
+  };
+
+  const handleUpdateIin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = iinInput.replace(/\D/g, '');
+    if (clean.length !== 12) {
+      setIinError('ИИН должен состоять из 12 цифр');
+      return;
+    }
+    setIinLoading(true);
+    setIinError('');
+    try {
+      const res = await api.updateIin(clean);
+      if (res.success) {
+        if (userProfile) {
+          const updated = { ...userProfile, iin: clean };
+          onProfileUpdated?.(updated);
+        }
+        setIsIinModalOpen(false);
+        showToast('ИИН успешно сохранен!', 'success');
+      } else {
+        setIinError(res.message || 'Ошибка обновления ИИН');
+      }
+    } catch (err: any) {
+      setIinError(err.message || 'Ошибка сохранения ИИН');
+    } finally {
+      setIinLoading(false);
+    }
+  };
+
   const displayName = userProfile?.full_name || 'Пользователь';
   const hasBoundEmail = !isStubOrEmptyEmail(localEmail);
 
   // Calculate actual played hours from completed/active bookings (1 hour per slot)
   const completedCount = bookings.filter((b) => b.status === 'completed').length;
   const hoursPlayed = completedCount * 1;
+
+  // Check if user has active booking restriction
+  const isUserRestricted = useMemo(() => {
+    if (!userProfile) return null;
+    if (userProfile.is_blocked) {
+      return {
+        reason: 'Блокировка аккаунта администрацией',
+        blockedUntil: userProfile.banned_until,
+      };
+    }
+    if (userProfile.is_banned && userProfile.banned_until && new Date(userProfile.banned_until) > new Date()) {
+      return {
+        reason: 'Неявка или опоздание на забронированное время (нарушение правил площадки)',
+        blockedUntil: userProfile.banned_until,
+      };
+    }
+    if (userProfile.userBans && Array.isArray(userProfile.userBans)) {
+      const active = userProfile.userBans.find((b) => new Date(b.banned_until) > new Date());
+      if (active) {
+        return {
+          reason: active.reason || 'Неявка или опоздание на забронированное время (нарушение правил площадки)',
+          blockedUntil: active.banned_until,
+        };
+      }
+    }
+    return null;
+  }, [userProfile]);
+
+  const restrictionUntilStr = useMemo(() => {
+    if (!isUserRestricted?.blockedUntil) return null;
+    try {
+      const d = new Date(isUserRestricted.blockedUntil);
+      if (isNaN(d.getTime())) return isUserRestricted.blockedUntil;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year}, ${hours}:${minutes}`;
+    } catch {
+      return isUserRestricted.blockedUntil;
+    }
+  }, [isUserRestricted]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50 text-slate-900 w-full animate-fade-in pb-24">
@@ -277,6 +361,28 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             <AlertCircle className="w-4 h-4 shrink-0" />
           )}
           <span>{toastMessage.text}</span>
+        </div>
+      )}
+
+      {/* Ban / Restriction Warning Banner */}
+      {isUserRestricted && (
+        <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-3.5 shadow-xs flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl bg-amber-100/90 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+            <ShieldAlert className="w-4 h-4" />
+          </div>
+          <div className="space-y-1 min-w-0 flex-1">
+            <div className="text-xs font-bold text-amber-950">
+              {t.bookingRestricted?.title || 'Бронирование ограничено'}
+            </div>
+            <div className="text-[11px] text-amber-800 leading-relaxed font-medium">
+              {isUserRestricted.reason || t.bookingRestricted?.desc || 'Доступ к бронированию приостановлен за нарушение правил площадки.'}
+            </div>
+            {restrictionUntilStr && (
+              <div className="text-[10px] font-semibold text-amber-900 pt-0.5">
+                {t.bookingRestricted?.until || 'Действует до:'} <span className="font-bold text-amber-950">{restrictionUntilStr}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -337,7 +443,21 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
               <CalendarIcon className="w-4 h-4 text-slate-400" />
               <span>ИИН</span>
             </div>
-            <span className="text-slate-400 font-medium font-mono">{userProfile?.iin || '—'}</span>
+            {userProfile?.iin ? (
+              <span className="text-slate-400 font-medium font-mono">{userProfile.iin}</span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-medium">Не указан</span>
+                <button
+                  type="button"
+                  onClick={handleOpenIinModal}
+                  className="text-[11px] font-bold text-[#00B050] hover:underline flex items-center gap-0.5 cursor-pointer bg-[#E8F8F0] hover:bg-[#D4F2E3] px-2 py-1 rounded-lg transition-colors border border-[#00B050]/20"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Указать ИИН</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Email */}
@@ -447,28 +567,42 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
         </div>
       </div>
 
-      {/* BLOCK 5: Экстренное открытие замка (Admin / Emergency Access) */}
-      {userProfile?.role === 'admin' && (
-        <div className="bg-white border border-emerald-200/80 rounded-2xl p-4 shadow-xs space-y-3">
-          <div className="flex items-center gap-2 text-emerald-800">
-            <ShieldAlert className="w-4 h-4 text-emerald-600 shrink-0" />
-            <h3 className="text-xs font-bold uppercase tracking-wider">
-              Панель администратора
-            </h3>
+      {/* BLOCK 5: Доступ школы / Панель администратора */}
+      {(() => {
+        const userRoleLower = (userProfile?.role || '').toLowerCase();
+        const isAdmin = userRoleLower === 'admin' || userRoleLower === 'superadmin';
+        const isSchool = userRoleLower === 'school' || userRoleLower === 'teacher';
+        const isPrivileged = isAdmin || isSchool;
+
+        if (!isPrivileged) return null;
+
+        const title = isSchool ? 'Доступ школы (учитель / администрация)' : 'Панель администратора';
+        const description = isSchool
+          ? 'Открыть замок для проведения урока или секции'
+          : 'Принудительное открытие замка через Wi-Fi шлюз TTLock (Cloud API)';
+
+        return (
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Unlock className="w-4 h-4 text-slate-700 stroke-[2.2]" />
+              <span className="text-sm font-semibold text-slate-900">
+                {title}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              {description}
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsForceUnlockModalOpen(true)}
+              className="w-full bg-[#00B159] hover:bg-[#009E4F] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            >
+              <Unlock className="w-4 h-4" />
+              <span>Открыть замок</span>
+            </button>
           </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Принудительное открытие замка через Wi-Fi шлюз TTLock (Cloud API).
-          </p>
-          <button
-            type="button"
-            onClick={() => setIsForceUnlockModalOpen(true)}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold py-3 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-          >
-            <Unlock className="w-3.5 h-3.5" />
-            <span>Открыть замок принудительно</span>
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Кнопка Выйти */}
       <div className="pt-2">
@@ -493,8 +627,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
-                <ShieldAlert className="w-5 h-5 text-emerald-600" />
-                <h2>Принудительное открытие</h2>
+                <Unlock className="w-5 h-5 text-[#00B159]" />
+                <h2>{(userProfile?.role || '').toLowerCase() === 'school' ? 'Доступ школы' : 'Принудительное открытие'}</h2>
               </div>
               <button
                 type="button"
@@ -507,7 +641,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Вы собираетесь принудительно разблокировать замок на площадке{' '}
+              Вы собираетесь открыть замок на площадке{' '}
               <span className="font-bold text-slate-900">«{targetVenue.title}»</span>.
             </p>
 
@@ -542,7 +676,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                 type="button"
                 disabled={isForceUnlocking}
                 onClick={handleConfirmForceUnlock}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 bg-[#00B159] hover:bg-[#009E4F] text-white font-bold py-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
               >
                 {isForceUnlocking ? (
                   <>
@@ -552,7 +686,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                 ) : (
                   <>
                     <Unlock className="w-3.5 h-3.5" />
-                    <span>Разблокировать</span>
+                    <span>Открыть замок</span>
                   </>
                 )}
               </button>
@@ -782,6 +916,75 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             >
               {t.close}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* IIN Binding Modal */}
+      {isIinModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in"
+          onClick={() => !iinLoading && setIsIinModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[380px] bg-white border border-slate-100 rounded-3xl p-5 shadow-2xl space-y-4 animate-fade-in text-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <CalendarIcon className="w-5 h-5 text-[#00B050]" />
+                <h2>Указать ИИН</h2>
+              </div>
+              <button
+                type="button"
+                disabled={iinLoading}
+                onClick={() => setIsIinModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {iinError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-2xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{iinError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateIin} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  12-значный номер ИИН
+                </label>
+                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all shadow-xs">
+                  <FileText className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={12}
+                    value={iinInput}
+                    onChange={(e) => setIinInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="990101300123"
+                    required
+                    autoFocus
+                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none tracking-widest font-mono"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={iinLoading || iinInput.replace(/\D/g, '').length !== 12}
+                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-sm disabled:opacity-50 cursor-pointer"
+              >
+                {iinLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span>Сохранить ИИН</span>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

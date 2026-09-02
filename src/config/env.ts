@@ -27,4 +27,6 @@ export const ENV = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || '',
   EMAIL_FROM: process.env.EMAIL_FROM || 'IGRAEM.KZ <noreply@igraem.kz>',
   FRONTEND_URL: process.env.FRONTEND_URL || 'https://igraem.kz',
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
 };

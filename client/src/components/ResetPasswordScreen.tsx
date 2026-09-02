@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Eye, EyeOff, CheckCircle2, ArrowRight, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, ArrowRight, ShieldCheck, AlertCircle, RefreshCw, ChevronLeft, X } from 'lucide-react';
 import { api } from '../services/api';
 import { Logo } from './Logo';
 
@@ -69,16 +69,33 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ initia
   return (
     <div className="flex-1 flex flex-col justify-between p-6 bg-white text-slate-900 w-full relative overflow-y-auto min-h-full">
       <div className="pt-2">
-        {/* Header Bar with Logo */}
-        <div className="mb-6 flex items-center justify-between">
-          <Logo size="lg" />
-          <button
-            type="button"
-            onClick={onBackToLogin}
-            className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <span>К авторизации</span>
-          </button>
+        {/* Header Bar with 3-column layout */}
+        <div className="mb-6 flex items-center justify-between relative w-full">
+          <div className="w-9 h-9 flex items-center justify-start shrink-0">
+            <button
+              type="button"
+              onClick={onBackToLogin}
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-slate-700 hover:text-slate-900 transition cursor-pointer"
+              title="Назад"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-700" />
+            </button>
+          </div>
+
+          <div className="relative flex justify-center">
+            <Logo size="md" />
+          </div>
+
+          <div className="w-9 h-9 flex items-center justify-end shrink-0">
+            <button
+              type="button"
+              onClick={onBackToLogin}
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer"
+              title="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Success View */}

@@ -460,9 +460,10 @@
 
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-grounds')">🏟️ Площадки & QR Двери</button>
-        <button class="tab-btn" onclick="switchTab('tab-iin')">🪪 Валидатор ИИН РК</button>
+        <button class="tab-btn" onclick="switchTab('tab-iin')" style="display: none;">🪪 Валидатор ИИН РК</button>
         <button class="tab-btn" onclick="switchTab('tab-bookings')">📅 Бронирования & 15 Слотов</button>
         <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ Админ-Мониторинг</button>
+        <button class="tab-btn" onclick="switchTab('tab-users')">👥 Пользователи</button>
         <button class="tab-btn" onclick="switchTab('tab-akimat')">🏛️ Дашборд Акимата</button>
         <button class="tab-btn" onclick="switchTab('tab-issues')">⚠️ Жалобы & Проблемы <span id="issuesCountBadge" style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;margin-left:4px;display:none;">0</span></button>
       </div>
@@ -838,6 +839,75 @@
         </div>
       </div>
 
+      <!-- TAB: USERS MANAGEMENT (👥 Пользователи) -->
+      <div id="tab-users" class="tab-content">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div class="card-title" style="margin-bottom: 4px; font-size: 18px; color: #fff;">
+                👥 Управление пользователями системы
+              </div>
+              <div style="font-size: 13px; color: var(--text-muted);">
+                Просмотр зарегистрированных пользователей, управление ролями (Admin, School, User), блокировка и сброс паролей.
+              </div>
+            </div>
+            <button class="btn" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="loadAdminUsers(true)">🔄 Обновить</button>
+          </div>
+
+          <!-- KPI Counters -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Всего пользователей</div>
+              <div style="font-size: 24px; font-weight: 800; color: #fff; margin-top: 4px;" id="usersTotalKpi">0</div>
+            </div>
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #a7f3d0; font-weight: 600;">🟢 Активные</div>
+              <div style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;" id="usersActiveKpi">0</div>
+            </div>
+            <div style="background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #c7d2fe; font-weight: 600;">🏫 Школы (School)</div>
+              <div style="font-size: 24px; font-weight: 800; color: #818cf8; margin-top: 4px;" id="usersSchoolKpi">0</div>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); padding: 14px; border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #fca5a5; font-weight: 600;">🔴 Заблокированные</div>
+              <div style="font-size: 24px; font-weight: 800; color: #ef4444; margin-top: 4px;" id="usersBlockedKpi">0</div>
+            </div>
+          </div>
+
+          <!-- Top Filter & Search Bar -->
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <input type="text" id="usersSearchInput" placeholder="🔍 Поиск по ФИО, последним цифрам ИИН или телефона..." oninput="debounceLoadUsers()" style="padding: 10px 14px; font-size: 13px; width: 100%;">
+            </div>
+            <div>
+              <select id="usersFilterSelect" onchange="loadAdminUsers(false)" style="padding: 10px 14px; font-size: 13px;">
+                <option value="all">👥 Все пользователи</option>
+                <option value="new">🆕 Новые пользователи (24 часа)</option>
+                <option value="blocked">🚫 Заблокированные</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Users Table -->
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminUsersManagementTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 10px 12px;">Имя Фамилия / ИИН / Телефон</th>
+                  <th style="padding: 10px 12px;">Дата регистрации</th>
+                  <th style="padding: 10px 12px;">Роль</th>
+                  <th style="padding: 10px 12px;">Статус</th>
+                  <th style="padding: 10px 12px; text-align: right;">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersManagementTableBody">
+                <tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-muted);">Загрузка пользователей...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- TAB 5: AKIMAT EXECUTIVE DASHBOARD -->
       <div id="tab-akimat" class="tab-content">
         <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(59, 130, 246, 0.06)); border-color: rgba(16, 185, 129, 0.3);">
@@ -1005,15 +1075,21 @@
         const res = await adminFetch(`${API_BASE}/users`);
         const data = await res.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          registeredUsers = data.data.map(u => ({
-            id: u.id,
-            iin: u.iin,
-            name: u.full_name + (u.role === 'admin' ? ' (Admin)' : ''),
-            phone: u.phone_number,
-            role: u.role
-          }));
+          registeredUsers = data.data.map(u => {
+            const r = (u.role || '').toLowerCase();
+            const isAdmin = r === 'admin' || r === 'superadmin';
+            return {
+              id: u.id,
+              iin: u.iin,
+              name: u.full_name + (isAdmin ? ' (Admin)' : ''),
+              phone: u.phone_number,
+              role: u.role
+            };
+          });
         } else {
           registeredUsers = [
+            { iin: '750423499020', name: 'Двойникова Татьяна Ивановна (Admin)', phone: '+77001185702', role: 'admin' },
+            { iin: '890806350081', name: 'Антон Тулеуов (Admin)', phone: '+77028120252', role: 'admin' },
             { iin: '890918350184', name: 'Ивкин Антон Витальевич (Admin)', phone: '+77715269538', role: 'admin' },
             { iin: '890820350058', name: 'Бердников Дмитрий Николаевич (Admin)', phone: '+77085965198', role: 'admin' },
             { iin: '840419350158', name: 'Харитонов Александр (Admin)', phone: '+77055896847', role: 'admin' },
@@ -1060,6 +1136,7 @@
       await loadOccupiedSlots();
       await loadHostRequests();
       await loadAdminIssues();
+      await loadAdminUsers();
       liveValidateIIN();
 
       // Real-time Gateway & Issues Polling (every 10s)
@@ -1097,6 +1174,7 @@
           await loadHostRequests();
           await loadActiveAccess();
           await loadAdminIssues();
+          await loadAdminUsers();
         } else {
           showAlert(data.message, 'error');
         }
@@ -1111,12 +1189,334 @@
       event.target.classList.add('active');
       document.getElementById(tabId).classList.add('active');
       if (tabId === 'tab-admin') loadAdminData();
+      if (tabId === 'tab-users') loadAdminUsers(true);
       if (tabId === 'tab-akimat') loadAkimatDashboard();
       if (tabId === 'tab-issues') loadAdminIssues();
       if (tabId === 'tab-bookings') {
         loadOccupiedSlots();
         loadHostRequests();
         loadOpenMatchmakingFeed();
+      }
+    }
+
+    // --- Users Management Tab Logic (👥 Пользователи) ---
+    let userSearchTimeout = null;
+    function debounceLoadUsers() {
+      clearTimeout(userSearchTimeout);
+      userSearchTimeout = setTimeout(() => loadAdminUsers(false), 300);
+    }
+
+    let isLoadingUsers = false;
+
+    function maskIIN(iin) {
+      if (!iin) return '—';
+      const str = String(iin).replace(/\D/g, '');
+      if (str.length >= 6) {
+        return str.slice(0, 6) + '******';
+      }
+      return str + '******';
+    }
+
+    function maskPhone(phone) {
+      if (!phone) return '—';
+      const digits = String(phone).replace(/\D/g, '');
+      if (digits.length >= 4) {
+        return `+7 *** *** ${digits.slice(-4)}`;
+      }
+      return phone;
+    }
+
+    function formatUserDate(dateStr) {
+      if (!dateStr) return '—';
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return String(dateStr);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        return `${day}.${month}.${year}, ${hours}:${mins}`;
+      } catch (e) {
+        return String(dateStr);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadAdminUsers(showLoadingIndicator = false) {
+      if (isLoadingUsers) return;
+      isLoadingUsers = true;
+
+      const tbody = document.getElementById('adminUsersManagementTableBody');
+      if (showLoadingIndicator && tbody) {
+        tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">⏳ Загрузка пользователей...</td></tr>`;
+      }
+
+      try {
+        const filter = document.getElementById('usersFilterSelect')?.value || 'all';
+        const search = document.getElementById('usersSearchInput')?.value || '';
+
+        const params = new URLSearchParams();
+        if (filter !== 'all') params.append('filter', filter);
+        if (search.trim()) params.append('search', search.trim());
+
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const res = await adminFetch(`${API_BASE}/admin/users${query}`);
+        const result = await res.json();
+
+        if (result && result.success && Array.isArray(result.data)) {
+          const users = result.data;
+
+          // Update KPI counters
+          let totalCount = result.total || users.length;
+          let activeCount = users.filter(u => u.status === 'ACTIVE').length;
+          let schoolCount = users.filter(u => u.role === 'SCHOOL').length;
+          let blockedCount = users.filter(u => u.status === 'BLOCKED').length;
+
+          if (document.getElementById('usersTotalKpi')) document.getElementById('usersTotalKpi').innerText = totalCount;
+          if (document.getElementById('usersActiveKpi')) document.getElementById('usersActiveKpi').innerText = activeCount;
+          if (document.getElementById('usersSchoolKpi')) document.getElementById('usersSchoolKpi').innerText = schoolCount;
+          if (document.getElementById('usersBlockedKpi')) document.getElementById('usersBlockedKpi').innerText = blockedCount;
+
+          if (!users.length) {
+            tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-muted);">Пользователи не найдены</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = users.map(u => {
+            // Role Badge
+            let roleBadge = '';
+            if (u.role === 'ADMIN') {
+              roleBadge = `<span style="display:inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">Admin</span>`;
+            } else if (u.role === 'SCHOOL') {
+              roleBadge = `<span style="display:inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4);">🏫 School</span>`;
+            } else {
+              roleBadge = `<span style="display:inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);">User</span>`;
+            }
+
+            // Status Badge
+            let statusBadge = '';
+            if (u.status === 'ACTIVE') {
+              statusBadge = `<span style="display:inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);"><span class="dot dot-online" style="width:6px; height:6px;"></span> Активен</span>`;
+            } else {
+              statusBadge = `<span style="display:inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"><span class="dot dot-offline" style="width:6px; height:6px;"></span> Заблокирован</span>`;
+            }
+
+            const maskedIin = maskIIN(u.iin);
+            const maskedPhone = maskPhone(u.phone_number || u.phoneNumber);
+            const regDate = formatUserDate(u.created_at || u.createdAt);
+            const emailHtml = u.email ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">✉️ ${escapeHtml(u.email)}</div>` : '';
+
+            return `
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
+                <td style="padding: 12px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #fff;">${escapeHtml(u.full_name || u.fullName || 'Без имени')}</div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    🪪 ИИН: <b>${maskedIin}</b> | 📞 Тел: <b>${maskedPhone}</b>
+                  </div>
+                  ${emailHtml}
+                </td>
+                <td style="padding: 12px; font-size: 12px; color: #d1d5db;">
+                  ${regDate}
+                </td>
+                <td style="padding: 12px;">
+                  ${roleBadge}
+                </td>
+                <td style="padding: 12px;">
+                  ${statusBadge}
+                </td>
+                <td style="padding: 12px; text-align: right;">
+                  <div style="position: relative; display: inline-block;">
+                    <button onclick="toggleUserDropdown('${u.id}', event)" class="btn" style="width: auto; padding: 4px 10px; font-size: 14px; font-weight: bold; background: rgba(255,255,255,0.08); border: 1px solid var(--card-border);">⋮</button>
+                    <div id="userDropdown_${u.id}" class="user-dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; z-index: 100; min-width: 170px; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); padding: 6px 0; margin-top: 4px; text-align: left;">
+                      <a href="javascript:void(0)" onclick="openResetPasswordModal('${u.id}', '${escapeHtml(u.full_name)}')" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: #fff; text-decoration: none; font-size: 12px;">🔑 Сменить пароль</a>
+                      <a href="javascript:void(0)" onclick="openChangeEmailModal('${u.id}', '${escapeHtml(u.full_name)}', '${escapeHtml(u.email || '')}')" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: #fff; text-decoration: none; font-size: 12px;">✉️ Сменить почту</a>
+                      <a href="javascript:void(0)" onclick="openChangeRoleModal('${u.id}', '${escapeHtml(u.full_name)}', '${u.role}')" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: #fff; text-decoration: none; font-size: 12px;">🎭 Сменить роль</a>
+                      <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 0;">
+                      ${u.status === 'ACTIVE'
+                        ? `<a href="javascript:void(0)" onclick="toggleUserBlockStatus('${u.id}', true)" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: #f87171; text-decoration: none; font-size: 12px;">🚫 Заблокировать</a>`
+                        : `<span style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: rgba(255,255,255,0.3); font-size: 12px; cursor: not-allowed;">🚫 Заблокировать</span>`
+                      }
+                      ${u.status === 'BLOCKED'
+                        ? `<a href="javascript:void(0)" onclick="toggleUserBlockStatus('${u.id}', false)" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: #34d399; text-decoration: none; font-size: 12px;">✅ Разблокировать</a>`
+                        : `<span style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: rgba(255,255,255,0.3); font-size: 12px; cursor: not-allowed;">✅ Разблокировать</span>`
+                      }
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.error('loadAdminUsers error:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: #f87171;">Ошибка загрузки пользователей</td></tr>`;
+      } finally {
+        isLoadingUsers = false;
+      }
+    }
+
+    function toggleUserDropdown(userId, event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById(`userDropdown_${userId}`);
+      const isVisible = menu && menu.style.display === 'block';
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+      if (menu && !isVisible) {
+        menu.style.display = 'block';
+      }
+    }
+
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+    });
+
+    async function toggleUserBlockStatus(userId, shouldBlock) {
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+      const actionText = shouldBlock ? 'заблокировать' : 'разблокировать';
+      if (!confirm(`Вы действительно хотите ${actionText} этого пользователя?`)) return;
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_blocked: shouldBlock, status: shouldBlock ? 'BLOCKED' : 'ACTIVE' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || `Статус пользователя успешно обновлен`, 'success');
+          await loadAdminUsers();
+        } else {
+          showAlert(data.message || 'Ошибка обновления статуса', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сети: ' + err.message, 'error');
+      }
+    }
+
+    // Password reset modal handlers
+    function openResetPasswordModal(userId, userName) {
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+      document.getElementById('resetPassUserId').value = userId;
+      document.getElementById('resetPassUserNameDisplay').innerText = `Пользователь: ${userName}`;
+      document.getElementById('resetPassNewPassword').value = '';
+      toggleResetPasswordModal(true);
+    }
+
+    function toggleResetPasswordModal(show) {
+      const modal = document.getElementById('adminResetPasswordModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    async function submitAdminResetPassword() {
+      const userId = document.getElementById('resetPassUserId').value;
+      const password = document.getElementById('resetPassNewPassword').value.trim();
+
+      if (!password || password.length < 6) {
+        showAlert('Пароль должен содержать минимум 6 символов', 'error');
+        return;
+      }
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+          method: 'POST',
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Пароль успешно изменен', 'success');
+          toggleResetPasswordModal(false);
+        } else {
+          showAlert(data.message || 'Ошибка смены пароля', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сети: ' + err.message, 'error');
+      }
+    }
+
+    // Email change modal handlers
+    function openChangeEmailModal(userId, userName, currentEmail) {
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+      document.getElementById('changeEmailUserId').value = userId;
+      document.getElementById('changeEmailUserNameDisplay').innerText = `Пользователь: ${userName}`;
+      document.getElementById('changeEmailInput').value = currentEmail || '';
+      toggleChangeEmailModal(true);
+    }
+
+    function toggleChangeEmailModal(show) {
+      const modal = document.getElementById('adminChangeEmailModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    async function submitAdminChangeEmail() {
+      const userId = document.getElementById('changeEmailUserId').value;
+      const email = document.getElementById('changeEmailInput').value.trim();
+
+      if (!email || !email.includes('@')) {
+        showAlert('Укажите корректный адрес Email', 'error');
+        return;
+      }
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/email`, {
+          method: 'PATCH',
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Email успешно обновлен', 'success');
+          toggleChangeEmailModal(false);
+          await loadAdminUsers();
+        } else {
+          showAlert(data.message || 'Ошибка обновления Email', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сети: ' + err.message, 'error');
+      }
+    }
+
+    // Role change modal handlers
+    function openChangeRoleModal(userId, userName, currentRole) {
+      document.querySelectorAll('.user-dropdown-menu').forEach(m => m.style.display = 'none');
+      document.getElementById('changeRoleUserId').value = userId;
+      document.getElementById('changeRoleUserNameDisplay').innerText = `Пользователь: ${userName}`;
+      const rUpper = (currentRole || 'USER').toUpperCase();
+      document.getElementById('changeRoleSelect').value = (rUpper === 'ADMIN' ? 'ADMIN' : (rUpper === 'SCHOOL' ? 'SCHOOL' : 'USER'));
+      toggleChangeRoleModal(true);
+    }
+
+    function toggleChangeRoleModal(show) {
+      const modal = document.getElementById('adminChangeRoleModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    async function submitAdminChangeRole() {
+      const userId = document.getElementById('changeRoleUserId').value;
+      const role = document.getElementById('changeRoleSelect').value;
+
+      try {
+        const res = await adminFetch(`${API_BASE}/admin/users/${userId}/role`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Роль пользователя успешно изменена', 'success');
+          toggleChangeRoleModal(false);
+          await loadAdminUsers();
+          await loadAllUsersFromDb();
+        } else {
+          showAlert(data.message || 'Ошибка изменения роли', 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сети: ' + err.message, 'error');
       }
     }
 
@@ -3103,6 +3503,76 @@
       <div style="display: flex; gap: 10px;">
         <button class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="submitBanUser()">⛔ Подтвердить блокировку</button>
         <button class="btn btn-secondary" onclick="toggleBanUserModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Admin Reset Password -->
+  <div id="adminResetPasswordModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 440px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">🔑 Сменить пароль пользователю</h3>
+        <button onclick="toggleResetPasswordModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      <input type="hidden" id="resetPassUserId">
+      <div style="margin-bottom: 14px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; font-size: 13px; color: #fff;" id="resetPassUserNameDisplay">
+        Пользователь: --
+      </div>
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Новый пароль (минимум 6 символов)</label>
+        <input type="password" id="resetPassNewPassword" placeholder="Введите новый пароль">
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitAdminResetPassword()" style="flex: 1;">💾 Сохранить пароль</button>
+        <button class="btn btn-secondary" onclick="toggleResetPasswordModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Admin Change Email -->
+  <div id="adminChangeEmailModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 440px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">✉️ Сменить Email пользователю</h3>
+        <button onclick="toggleChangeEmailModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      <input type="hidden" id="changeEmailUserId">
+      <div style="margin-bottom: 14px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; font-size: 13px; color: #fff;" id="changeEmailUserNameDisplay">
+        Пользователь: --
+      </div>
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Новый адрес Email</label>
+        <input type="email" id="changeEmailInput" placeholder="user@example.kz">
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitAdminChangeEmail()" style="flex: 1;">💾 Сохранить Email</button>
+        <button class="btn btn-secondary" onclick="toggleChangeEmailModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Admin Change Role -->
+  <div id="adminChangeRoleModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 440px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">🎭 Сменить роль пользователя</h3>
+        <button onclick="toggleChangeRoleModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      <input type="hidden" id="changeRoleUserId">
+      <div style="margin-bottom: 14px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; font-size: 13px; color: #fff;" id="changeRoleUserNameDisplay">
+        Пользователь: --
+      </div>
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Выберите роль в системе</label>
+        <select id="changeRoleSelect">
+          <option value="ADMIN">🔴 Admin (Администратор - полный доступ)</option>
+          <option value="SCHOOL">🏫 School (Школа - дистанционное открытие замка)</option>
+          <option value="USER">🟢 User (Обычный пользователь / Игрок)</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitAdminChangeRole()" style="flex: 1;">💾 Применить роль</button>
+        <button class="btn btn-secondary" onclick="toggleChangeRoleModal(false)" style="width: auto;">Отмена</button>
       </div>
     </div>
   </div>

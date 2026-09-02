@@ -28,11 +28,19 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
+      const userRole = (req.user.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+      const isSchool = userRole === 'SCHOOL' || userRole === 'TEACHER' || req.user.role === 'school' || req.user.role === 'teacher';
+      const isPrivileged = isAdmin || isSchool;
+
       const booking_id = req.body.booking_id || req.body.bookingId || req.params.id;
+      const targetGroundId = req.body.ground_id || req.body.groundId || req.body.courtId;
+      const targetLockId = req.body.lockId || req.body.lock_id;
 
       const { dateStr: currentDateStr, timeStr: currentTimeStr } = getLocalNow();
 
-      let booking;
+      let booking = null;
+      let ground = null;
 
       if (booking_id) {
         booking = await prisma.booking.findUnique({
@@ -43,8 +51,13 @@ export class LocksController {
             joinRequests: true,
           },
         });
-      } else {
-        // Auto-detect active booking for user right now
+        if (booking) {
+          ground = booking.ground;
+        }
+      }
+
+      if (!booking && !isPrivileged) {
+        // Auto-detect active booking for regular user right now
         const activeBookings = await prisma.booking.findMany({
           where: {
             booking_date: currentDateStr,
@@ -75,87 +88,104 @@ export class LocksController {
             message: 'У вас нет активного забронированного сеанса в данный момент',
           });
         }
+        ground = booking.ground;
       }
 
-      if (!booking) {
+      // If user is privileged (SCHOOL or ADMIN) and no booking was matched, find ground directly
+      if (!ground && isPrivileged) {
+        if (targetGroundId) {
+          ground = await prisma.ground.findUnique({
+            where: { id: targetGroundId },
+            include: { gateways: true },
+          });
+          if (!ground) {
+            if (targetGroundId.includes('football')) {
+              ground = await prisma.ground.findFirst({ where: { type: 'football' }, include: { gateways: true } });
+            } else if (targetGroundId.includes('basketball')) {
+              ground = await prisma.ground.findFirst({ where: { type: 'basketball' }, include: { gateways: true } });
+            }
+          }
+        }
+        if (!ground && targetLockId) {
+          ground = await prisma.ground.findFirst({
+            where: { ttlock_lock_id: String(targetLockId) },
+            include: { gateways: true },
+          });
+        }
+        if (!ground) {
+          ground = await prisma.ground.findFirst({ include: { gateways: true } });
+        }
+        if (!ground) {
+          return res.status(404).json({ success: false, message: 'Спортивная площадка не найдена' });
+        }
+      }
+
+      if (!booking && !isPrivileged) {
         return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
       }
 
-      // Check if user is host, approved guest, or has an approved join request
-      const isHost = booking.host_user_id === req.user.id;
-      const isApprovedGuest = booking.guests.some(
-        (g) => g.user_id === req.user?.id && g.status === 'approved'
-      );
-      const isApprovedJoinRequest = booking.joinRequests.some(
-        (r) => (r.user_iin === req.user?.iin || r.user_phone === req.user?.phone_number) && r.status === 'APPROVED'
-      );
+      // Check access rights if not privileged
+      if (booking && !isPrivileged) {
+        const isHost = booking.host_user_id === req.user.id;
+        const isApprovedGuest = booking.guests.some((g) => g.user_id === req.user?.id && g.status === 'approved');
+        const isApprovedJoinRequest = booking.joinRequests.some(
+          (r) => (r.user_iin === req.user?.iin || r.user_phone === req.user?.phone_number) && r.status === 'APPROVED'
+        );
 
-      const userRole = (req.user.role || '').toUpperCase();
-      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isHost && !isApprovedGuest && !isApprovedJoinRequest) {
+          return res.status(403).json({
+            success: false,
+            message: 'У вас нет доступа к этой брони для разблокировки замка',
+          });
+        }
 
-      if (!isHost && !isApprovedGuest && !isApprovedJoinRequest && !isAdmin) {
-        return res.status(403).json({
-          success: false,
-          message: 'У вас нет доступа к этой брони для разблокировки замка',
-        });
+        // Time window check for regular users
+        const now = new Date();
+        const [startH, startM] = booking.start_time.split(':').map(Number);
+        const [endH, endM] = booking.end_time.split(':').map(Number);
+
+        let bY = now.getFullYear();
+        let bM = now.getMonth() + 1;
+        let bD = now.getDate();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(booking.booking_date)) {
+          const [y, m, d] = booking.booking_date.split('-').map(Number);
+          bY = y; bM = m; bD = d;
+        } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(booking.booking_date)) {
+          const [d, m, y] = booking.booking_date.split('.').map(Number);
+          bY = y; bM = m; bD = d;
+        }
+
+        const bookingStartDate = new Date(bY, bM - 1, bD, startH || 0, startM || 0, 0, 0);
+        const bookingEndDate = new Date(bY, bM - 1, bD, endH || 0, endM || 0, 0, 0);
+        const unlockAllowedTime = new Date(bookingStartDate.getTime() - 10 * 60 * 1000);
+
+        if (now.getTime() < unlockAllowedTime.getTime()) {
+          const diffMins = Math.ceil((bookingStartDate.getTime() - now.getTime()) / (60 * 1000));
+          return res.status(403).json({
+            success: false,
+            doorUnlocked: false,
+            message: `Открытие замка станет доступно за 10 минут до начала брони (до начала: ${diffMins} мин)`,
+          });
+        }
+
+        if (now.getTime() >= bookingEndDate.getTime()) {
+          return res.status(403).json({
+            success: false,
+            doorUnlocked: false,
+            message: `Время сеанса (${booking.start_time} – ${booking.end_time}) уже завершилось`,
+          });
+        }
       }
 
-      // Parse booking date and time for strict timestamp window validation
-      const now = new Date();
-      const [startH, startM] = booking.start_time.split(':').map(Number);
-      const [endH, endM] = booking.end_time.split(':').map(Number);
-
-      let bY = now.getFullYear();
-      let bM = now.getMonth() + 1;
-      let bD = now.getDate();
-
-      if (/^\d{4}-\d{2}-\d{2}$/.test(booking.booking_date)) {
-        const [y, m, d] = booking.booking_date.split('-').map(Number);
-        bY = y;
-        bM = m;
-        bD = d;
-      } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(booking.booking_date)) {
-        const [d, m, y] = booking.booking_date.split('.').map(Number);
-        bY = y;
-        bM = m;
-        bD = d;
-      }
-
-      const bookingStartDate = new Date(bY, bM - 1, bD, startH || 0, startM || 0, 0, 0);
-      const bookingEndDate = new Date(bY, bM - 1, bD, endH || 0, endM || 0, 0, 0);
-      const unlockAllowedTime = new Date(bookingStartDate.getTime() - 10 * 60 * 1000); // 10 mins before slot start
-
-      if (!isAdmin && now.getTime() < unlockAllowedTime.getTime()) {
-        const diffMins = Math.ceil((bookingStartDate.getTime() - now.getTime()) / (60 * 1000));
-        return res.status(403).json({
-          success: false,
-          doorUnlocked: false,
-          message: `Открытие замка станет доступно за 10 минут до начала брони (до начала: ${diffMins} мин)`,
-        });
-      }
-
-      if (!isAdmin && now.getTime() >= bookingEndDate.getTime()) {
-        return res.status(403).json({
-          success: false,
-          doorUnlocked: false,
-          message: `Время сеанса (${booking.start_time} – ${booking.end_time}) уже завершилось`,
-        });
-      }
-
-      // GPS Geolocation Check (Haversine Formula) - Strictly required and enforced (50m radius) for non-admin users
-      if (!isAdmin) {
+      // GPS Geolocation Check - strictly enforced for regular users, BYPASSED for SCHOOL and ADMIN
+      if (!isPrivileged) {
         const rawLat = req.body.latitude ?? req.body.userLatitude ?? req.body.user_latitude ?? req.body.lat;
         const rawLon = req.body.longitude ?? req.body.userLongitude ?? req.body.user_longitude ?? req.body.lng;
 
         if (
-          rawLat === undefined ||
-          rawLat === null ||
-          rawLat === '' ||
-          isNaN(Number(rawLat)) ||
-          rawLon === undefined ||
-          rawLon === null ||
-          rawLon === '' ||
-          isNaN(Number(rawLon))
+          rawLat === undefined || rawLat === null || rawLat === '' || isNaN(Number(rawLat)) ||
+          rawLon === undefined || rawLon === null || rawLon === '' || isNaN(Number(rawLon))
         ) {
           return res.status(400).json({
             success: false,
@@ -166,8 +196,8 @@ export class LocksController {
 
         const userLat = Number(rawLat);
         const userLon = Number(rawLon);
-        const distanceMeters = calculateDistanceMeters(userLat, userLon, booking.ground.latitude, booking.ground.longitude);
-        const allowedRadius = booking.ground.allowed_radius_meters || 50;
+        const distanceMeters = calculateDistanceMeters(userLat, userLon, ground!.latitude, ground!.longitude);
+        const allowedRadius = ground!.allowed_radius_meters || 50;
 
         if (distanceMeters > allowedRadius) {
           const distanceFormatted = distanceMeters >= 1000
@@ -181,45 +211,48 @@ export class LocksController {
           });
         }
       } else {
-        console.log(`[LocksController.unlockByAppButton] Geolocation distance check bypassed for admin: ${req.user.full_name} (${req.user.role})`);
+        console.log(`[LocksController.unlockByAppButton] Geolocation & Active Booking bypassed for privileged user: ${req.user.full_name} (${userRole})`);
       }
 
-      // Determine Gateway online status
-      const gateway = booking.ground.gateways[0];
+      const gateway = ground!.gateways?.[0];
       const isGatewayOnline = gateway ? gateway.status === 'online' : true;
 
-      // Execute TTLock Unlock
       const unlockResult = await TTLockService.unlockLock(
-        booking.ground.ttlock_lock_id,
+        ground!.ttlock_lock_id,
         isGatewayOnline
       );
 
-      // Log unlock operation
       await prisma.lockLog.create({
         data: {
-          booking_id: booking.id,
+          booking_id: booking?.id || null,
           user_id: req.user.id,
-          ground_id: booking.ground.id,
-          method: 'app_button',
+          ground_id: ground!.id,
+          method: isSchool ? 'school_remote_unlock' : (isAdmin ? 'admin_remote_unlock' : 'app_button'),
           unlock_type: unlockResult.mode,
           success: unlockResult.success,
-          details: unlockResult.message,
+          details: isPrivileged
+            ? `Дистанционное открытие замка (${userRole}): ${req.user.full_name} на площадке "${ground!.name}"`
+            : unlockResult.message,
         },
       });
 
-      // Mark booking as door opened to prevent No-Show ban
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: { is_door_opened: true },
-      });
+      if (booking) {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { is_door_opened: true },
+        });
+      }
 
       return res.json({
         success: unlockResult.success,
         doorUnlocked: true,
+        message: unlockResult.success
+          ? `Замок на площадке "${ground!.name}" успешно открыт`
+          : `Ошибка открытия замка: ${unlockResult.message}`,
         data: {
           ...unlockResult,
-          booking_id: booking.id,
-          ground_name: booking.ground.name,
+          booking_id: booking?.id || null,
+          ground_name: ground!.name,
         },
       });
     } catch (error: any) {
@@ -235,6 +268,26 @@ export class LocksController {
   public static async getActiveAccess(req: AuthenticatedRequest, res: Response) {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const userRole = (req.user.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+      const isSchool = userRole === 'SCHOOL' || userRole === 'TEACHER' || req.user.role === 'school' || req.user.role === 'teacher';
+
+      if (isAdmin || isSchool) {
+        const defaultGround = await prisma.ground.findFirst();
+        return res.json({
+          success: true,
+          hasAccess: true,
+          data: {
+            booking_id: null,
+            ground_id: defaultGround?.id || '',
+            ground_name: defaultGround?.name || 'Спортивная площадка',
+            qr_code_token: defaultGround?.qr_code_token || 'QR_SCHOOL11_FOOTBALL',
+            timeSlot: '24/7 (Постоянный доступ)',
+            role: isSchool ? 'Школа (Прямой доступ)' : 'Администратор (Полный доступ)',
+          },
+        });
+      }
 
       const { dateStr: currentDateStr, timeStr: currentTimeStr } = getLocalNow();
 
@@ -298,6 +351,11 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
+      const userRole = (req.user.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+      const isSchool = userRole === 'SCHOOL' || userRole === 'TEACHER' || req.user.role === 'school' || req.user.role === 'teacher';
+      const isPrivileged = isAdmin || isSchool;
+
       const { qr_code_token, userLatitude, user_latitude, userLongitude, user_longitude } = req.body;
 
       if (!qr_code_token) {
@@ -311,6 +369,31 @@ export class LocksController {
 
       if (!ground) {
         return res.status(404).json({ success: false, message: 'Площадка не найдена' });
+      }
+
+      // Privileged unlock for School or Admin (bypasses active booking & GPS checks)
+      if (isPrivileged) {
+        const gateway = ground.gateways[0];
+        const isGatewayOnline = gateway ? gateway.status === 'online' : true;
+        const unlockResult = await TTLockService.unlockLock(ground.ttlock_lock_id, isGatewayOnline);
+
+        await prisma.lockLog.create({
+          data: {
+            user_id: req.user.id,
+            ground_id: ground.id,
+            method: isSchool ? 'school_qr_unlock' : 'admin_qr_unlock',
+            unlock_type: unlockResult.mode,
+            success: unlockResult.success,
+            details: `Открытие по QR (${userRole}): ${req.user.full_name} на площадке "${ground.name}"`,
+          },
+        });
+
+        return res.json({
+          success: unlockResult.success,
+          doorUnlocked: true,
+          message: unlockResult.message || `Замок на площадке "${ground.name}" открыт`,
+          data: unlockResult,
+        });
       }
 
       const { dateStr: currentDateStr, timeStr: currentTimeStr } = getLocalNow();
@@ -346,48 +429,41 @@ export class LocksController {
 
       // If already authorized host/guest/approved request, unlock door physically!
       if (isHost || isApprovedGuest || isApprovedJoinRequest) {
-        const userRole = (req.user.role || '').toUpperCase();
-        const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || req.user.role === 'admin' || req.user.role === 'superadmin';
+        const rawLat = req.body.latitude ?? req.body.userLatitude ?? req.body.user_latitude ?? req.body.lat;
+        const rawLon = req.body.longitude ?? req.body.userLongitude ?? req.body.user_longitude ?? req.body.lng;
 
-        if (!isAdmin) {
-          const rawLat = req.body.latitude ?? req.body.userLatitude ?? req.body.user_latitude ?? req.body.lat;
-          const rawLon = req.body.longitude ?? req.body.userLongitude ?? req.body.user_longitude ?? req.body.lng;
+        if (
+          rawLat === undefined ||
+          rawLat === null ||
+          rawLat === '' ||
+          isNaN(Number(rawLat)) ||
+          rawLon === undefined ||
+          rawLon === null ||
+          rawLon === '' ||
+          isNaN(Number(rawLon))
+        ) {
+          return res.status(400).json({
+            success: false,
+            doorUnlocked: false,
+            message: 'Требуется передача геопозиции для открытия замка',
+          });
+        }
 
-          if (
-            rawLat === undefined ||
-            rawLat === null ||
-            rawLat === '' ||
-            isNaN(Number(rawLat)) ||
-            rawLon === undefined ||
-            rawLon === null ||
-            rawLon === '' ||
-            isNaN(Number(rawLon))
-          ) {
-            return res.status(400).json({
-              success: false,
-              doorUnlocked: false,
-              message: 'Требуется передача геопозиции для открытия замка',
-            });
-          }
+        const userLat = Number(rawLat);
+        const userLon = Number(rawLon);
+        const distanceMeters = calculateDistanceMeters(userLat, userLon, ground.latitude, ground.longitude);
+        const allowedRadius = ground.allowed_radius_meters || 50;
 
-          const userLat = Number(rawLat);
-          const userLon = Number(rawLon);
-          const distanceMeters = calculateDistanceMeters(userLat, userLon, ground.latitude, ground.longitude);
-          const allowedRadius = ground.allowed_radius_meters || 50;
+        if (distanceMeters > allowedRadius) {
+          const distanceFormatted = distanceMeters >= 1000
+            ? `${(distanceMeters / 1000).toFixed(1)} км`
+            : `${Math.round(distanceMeters)} м`;
 
-          if (distanceMeters > allowedRadius) {
-            const distanceFormatted = distanceMeters >= 1000
-              ? `${(distanceMeters / 1000).toFixed(1)} км`
-              : `${Math.round(distanceMeters)} м`;
-
-            return res.status(403).json({
-              success: false,
-              doorUnlocked: false,
-              message: `Вы находитесь слишком далеко от площадки (${distanceFormatted}). Подойдите ближе 50 метров.`,
-            });
-          }
-        } else {
-          console.log(`[LocksController.unlockByDoorQr] Geolocation distance check bypassed for admin: ${req.user.full_name} (${req.user.role})`);
+          return res.status(403).json({
+            success: false,
+            doorUnlocked: false,
+            message: `Вы находитесь слишком далеко от площадки (${distanceFormatted}). Подойдите ближе 50 метров.`,
+          });
         }
 
         const gateway = ground.gateways[0];
@@ -466,9 +542,12 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const role = req.user.role?.toLowerCase();
-      if (role !== 'admin' && role !== 'superadmin') {
-        return res.status(403).json({ success: false, message: 'Доступ запрещен: требуются права администратора' });
+      const role = (req.user.role || '').toLowerCase();
+      const isAdmin = role === 'admin' || role === 'superadmin';
+      const isSchool = role === 'school' || role === 'teacher';
+
+      if (!isAdmin && !isSchool) {
+        return res.status(403).json({ success: false, message: 'Доступ запрещен: требуются права администратора или школы' });
       }
 
       const { groundId, ground_id, lockId } = req.body;
@@ -509,27 +588,31 @@ export class LocksController {
 
       const unlockResult = await TTLockService.unlockLock(ground.ttlock_lock_id, isGatewayOnline);
 
-      // Audit log entry for administrator force unlock
+      // Audit log entry
       await prisma.lockLog.create({
         data: {
           user_id: req.user.id,
           ground_id: ground.id,
-          method: 'admin_force_unlock',
+          method: isSchool ? 'school_force_unlock' : 'admin_force_unlock',
           unlock_type: unlockResult.mode,
           success: unlockResult.success,
-          details: `Экстренное принудительное открытие замка администратором: ${req.user.full_name} (${req.user.phone_number || req.user.iin}) на площадке "${ground.name}"`,
+          details: isSchool
+            ? `Прямое открытие замка школой: ${req.user.full_name} (${req.user.phone_number || req.user.iin}) на площадке "${ground.name}"`
+            : `Экстренное принудительное открытие замка администратором: ${req.user.full_name} (${req.user.phone_number || req.user.iin}) на площадке "${ground.name}"`,
         },
       });
 
       return res.json({
         success: unlockResult.success,
+        doorUnlocked: true,
         message: unlockResult.success
-          ? `Замок на площадке "${ground.name}" успешно открыт администратором`
+          ? (isSchool ? `Замок на площадке "${ground.name}" успешно открыт` : `Замок на площадке "${ground.name}" успешно открыт администратором`)
           : `Ошибка открытия замка: ${unlockResult.message}`,
         data: {
           groundId: ground.id,
           groundName: ground.name,
-          adminName: req.user.full_name,
+          userName: req.user.full_name,
+          role: isSchool ? 'SCHOOL' : 'ADMIN',
           ...unlockResult,
         },
       });

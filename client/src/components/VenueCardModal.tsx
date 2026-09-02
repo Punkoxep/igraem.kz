@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Heart, Check, Star, AlertCircle } from 'lucide-react';
+import { Heart, Check, Star, AlertCircle, ShieldAlert } from 'lucide-react';
 import { Venue, TimeSlot, Booking } from '../types';
 import { calculateDistanceMeters, formatDistance } from '../utils/geo';
-import { api } from '../services/api';
+import { api, UserProfile } from '../services/api';
+import { Language, translations } from '../i18n/translations';
+import { BookingBlockedModal } from './BookingBlockedModal';
 
 interface VenueCardModalProps {
   venue: Venue | null;
   userCoords?: { lat: number; lng: number } | null;
   userBookings?: Booking[];
+  userProfile?: UserProfile | null;
+  currentLang?: Language;
   onClose: () => void;
   onBook: (venue: Venue, date: string, slot: TimeSlot) => void;
   isFavorite: boolean;
   onToggleFavorite: (venueId: string) => void;
+  onRequireAuth?: (pending?: { venue: Venue; dateStr: string; slot: TimeSlot }) => void;
 }
 
 const getUpcomingDays = () => {
@@ -63,12 +68,17 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
   venue,
   userCoords,
   userBookings = [],
+  userProfile,
+  currentLang = 'ru',
   onClose,
   onBook,
   isFavorite,
   onToggleFavorite,
+  onRequireAuth,
 }) => {
   if (!venue) return null;
+
+  const t = translations[currentLang];
 
   // Calculate real GPS distance in meters/km if user geolocation is enabled
   const distanceText = useMemo(() => {
@@ -82,8 +92,38 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
   const [selectedSlotTimes, setSelectedSlotTimes] = useState<string[]>([]);
   const [groundBookings, setGroundBookings] = useState<any[]>([]);
   const [isJoinSuccessModalOpen, setIsJoinSuccessModalOpen] = useState(false);
+  const [isBlockedModalOpen, setIsBlockedModalOpen] = useState(false);
   const [slotWarningMsg, setSlotWarningMsg] = useState<string | null>(null);
   const touchStartY = useRef<number | null>(null);
+
+  // Check if user is currently restricted from booking on this venue or globally
+  const activeRestriction = useMemo(() => {
+    if (!userProfile) return null;
+    if (userProfile.is_blocked) {
+      return {
+        reason: 'Блокировка аккаунта администрацией',
+        blockedUntil: userProfile.banned_until,
+      };
+    }
+    if (userProfile.is_banned && userProfile.banned_until && new Date(userProfile.banned_until) > new Date()) {
+      return {
+        reason: 'Неявка или опоздание на забронированное время (нарушение правил площадки)',
+        blockedUntil: userProfile.banned_until,
+      };
+    }
+    if (userProfile.userBans && Array.isArray(userProfile.userBans)) {
+      const active = userProfile.userBans.find(
+        (b) => new Date(b.banned_until) > new Date() && (!b.ground_id || b.ground_id === venue?.id)
+      );
+      if (active) {
+        return {
+          reason: active.reason || 'Неявка или опоздание на забронированное время (нарушение правил площадки)',
+          blockedUntil: active.banned_until,
+        };
+      }
+    }
+    return null;
+  }, [userProfile, venue?.id]);
 
   const activeDay = upcomingDays[selectedDateIdx] || upcomingDays[0];
 
@@ -393,9 +433,18 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
 
   const handleActionClick = async () => {
     if (selectedSlotTimes.length > 0 && startTime && endTime) {
+      if (activeRestriction && !isSelectedSlotOccupied) {
+        setIsBlockedModalOpen(true);
+        return;
+      }
+
       if (isSelectedSlotOccupied) {
         if (isFull) {
           setSlotWarningMsg('Все места на эту игру уже заняты (15/15)');
+          return;
+        }
+        if (!userProfile && onRequireAuth) {
+          onRequireAuth();
           return;
         }
         const targetBookingId = selectedBooking?.id || selectedBooking?.bookingId;
@@ -461,9 +510,6 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
                 {venue.sport === 'football' ? '⚽ Футбол' : '🏀 Баскетбол'}
               </span>
               <div className="flex items-center gap-1 text-slate-400 text-xs font-semibold">
-                <Star className="w-3.5 h-3.5 fill-[#FFB800] text-[#FFB800]" />
-                <span className="text-slate-800 font-bold">5.0</span>
-                <span>•</span>
                 <span>{venue.city}</span>
                 {distanceText && (
                   <>
@@ -482,7 +528,13 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
 
           <button
             type="button"
-            onClick={() => onToggleFavorite(venue.id)}
+            onClick={() => {
+              if (!userProfile && onRequireAuth) {
+                onRequireAuth();
+                return;
+              }
+              onToggleFavorite(venue.id);
+            }}
             className="w-10 h-10 rounded-2xl bg-[#F8FAFC] border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50/50 transition-all shrink-0 cursor-pointer"
           >
             <Heart
@@ -538,10 +590,10 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
               return (
                 <div
                   key={idx}
-                  className="py-3 px-3.5 rounded-2xl text-xs bg-[#F4F4F6] border border-slate-100 text-slate-400 font-medium cursor-not-allowed flex items-center justify-between select-none opacity-60"
+                  className="relative py-3 px-3.5 rounded-2xl text-xs bg-[#F4F4F6] border border-slate-100 text-slate-400 font-medium cursor-not-allowed flex items-center justify-center select-none opacity-60"
                   title="Время уже прошло"
                 >
-                  <span>{slotItem.time}</span>
+                  <span className="whitespace-nowrap text-center">{slotItem.time}</span>
                 </div>
               );
             }
@@ -606,15 +658,15 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
                 key={idx}
                 type="button"
                 onClick={() => handleSlotClick(slotItem.time)}
-                className={`py-3 px-3.5 rounded-2xl text-xs transition-all flex items-center justify-between cursor-pointer ${
+                className={`relative py-3 px-2 rounded-2xl text-xs transition-all flex items-center justify-center cursor-pointer ${
                   isSelected
                     ? 'bg-[#E8F8F0] border-2 border-[#00B050] text-slate-900 font-bold shadow-xs'
                     : 'bg-[#F8FAFC] hover:bg-slate-100 text-slate-900 font-semibold border border-slate-100'
                 }`}
               >
-                <span>{slotItem.time}</span>
+                <span className="whitespace-nowrap text-center">{slotItem.time}</span>
                 {isSelected && (
-                  <Check className="w-4 h-4 stroke-[2.5px] text-[#00B050]" />
+                  <Check className="w-3.5 h-3.5 stroke-[2.5px] text-[#00B050] absolute right-[2px] top-1/2 -translate-y-1/2" />
                 )}
               </button>
             );
@@ -696,6 +748,15 @@ export const VenueCardModal: React.FC<VenueCardModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Booking Blocked / Restriction Informative Modal */}
+      <BookingBlockedModal
+        isOpen={isBlockedModalOpen}
+        onClose={() => setIsBlockedModalOpen(false)}
+        reason={activeRestriction?.reason}
+        blockedUntil={activeRestriction?.blockedUntil}
+        currentLang={currentLang}
+      />
     </div>
   );
 };

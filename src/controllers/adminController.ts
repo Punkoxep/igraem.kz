@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class AdminController {
   /**
@@ -317,19 +320,19 @@ export class AdminController {
       bookings.forEach((b) => {
         let slotPlayers = 1;
         if (b.host_user) {
-          const iin = b.host_user.iin;
-          const existing = playerMap.get(iin) || { iin, name: b.host_user.full_name, phone: b.host_user.phone_number, gender: b.host_user.gender, role: 'Хозяин слота', gamesCount: 0 };
+          const playerKey = b.host_user.iin || b.host_user.phone_number || b.host_user.id;
+          const existing = playerMap.get(playerKey) || { iin: b.host_user.iin || '—', name: b.host_user.full_name, phone: b.host_user.phone_number || '—', gender: b.host_user.gender || 'male', role: 'Хозяин слота', gamesCount: 0 };
           existing.gamesCount += 1;
-          playerMap.set(iin, existing);
+          playerMap.set(playerKey, existing);
         }
 
         b.guests.forEach((g) => {
           slotPlayers++;
           if (g.user) {
-            const iin = g.user.iin;
-            const existing = playerMap.get(iin) || { iin, name: g.user.full_name, phone: g.user.phone_number, gender: g.user.gender, role: 'Участник', gamesCount: 0 };
+            const playerKey = g.user.iin || g.user.phone_number || g.user.id;
+            const existing = playerMap.get(playerKey) || { iin: g.user.iin || '—', name: g.user.full_name, phone: g.user.phone_number || '—', gender: g.user.gender || 'male', role: 'Участник', gamesCount: 0 };
             existing.gamesCount += 1;
-            playerMap.set(iin, existing);
+            playerMap.set(playerKey, existing);
           }
         });
 
@@ -567,17 +570,42 @@ export class AdminController {
 
   /**
    * GET /api/v1/admin/users
-   * Get list of registered users with optional filter ('new' | 'all')
+   * Get list of registered users with search (?search=), filter (?filter=all|new|blocked), and pagination
    */
   public static async getUsersList(req: Request, res: Response) {
     try {
-      const { filter } = req.query;
+      const { filter, search, page, limit } = req.query;
       let whereClause: any = {};
 
-      if (filter === 'new') {
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        whereClause.created_at = { gte: twentyFourHoursAgo };
+      // Search across name, IIN, phone, and email
+      if (search && typeof search === 'string' && search.trim()) {
+        const query = search.trim();
+        whereClause.OR = [
+          { full_name: { contains: query, mode: 'insensitive' } },
+          { iin: { contains: query } },
+          { phone_number: { contains: query } },
+          { email: { contains: query, mode: 'insensitive' } },
+        ];
       }
+
+      // Filter modes
+      const now = new Date();
+      if (filter === 'new') {
+        const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        whereClause.created_at = { gte: twentyFourHoursAgo };
+      } else if (filter === 'blocked') {
+        whereClause.OR = [
+          ...(whereClause.OR || []),
+          { is_blocked: true },
+          { is_banned: true },
+        ];
+      }
+
+      const pageNum = Math.max(1, parseInt(page as string) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 50));
+      const skip = (pageNum - 1) * limitNum;
+
+      const total = await prisma.user.count({ where: whereClause });
 
       const users = await prisma.user.findMany({
         where: whereClause,
@@ -588,19 +616,285 @@ export class AdminController {
           iin: true,
           email: true,
           role: true,
+          is_blocked: true,
           is_banned: true,
           banned_until: true,
           created_at: true,
         },
         orderBy: { created_at: 'desc' },
+        skip,
+        take: limitNum,
+      });
+
+      const formattedUsers = users.map((u) => {
+        const isCurrentlyBlocked = Boolean(
+          u.is_blocked || (u.is_banned && (!u.banned_until || new Date(u.banned_until) > now))
+        );
+
+        // Normalize role to 'ADMIN' | 'SCHOOL' | 'USER'
+        let normalizedRole = 'USER';
+        const roleLower = (u.role || '').toLowerCase();
+        if (roleLower === 'admin' || roleLower === 'superadmin') {
+          normalizedRole = 'ADMIN';
+        } else if (roleLower === 'school' || roleLower === 'teacher') {
+          normalizedRole = 'SCHOOL';
+        } else {
+          normalizedRole = 'USER';
+        }
+
+        return {
+          id: u.id,
+          full_name: u.full_name,
+          fullName: u.full_name,
+          phone_number: u.phone_number,
+          phoneNumber: u.phone_number,
+          iin: u.iin,
+          email: u.email || '',
+          role: normalizedRole,
+          rawRole: u.role,
+          status: isCurrentlyBlocked ? 'BLOCKED' : 'ACTIVE',
+          is_blocked: isCurrentlyBlocked,
+          isBlocked: isCurrentlyBlocked,
+          is_banned: u.is_banned,
+          banned_until: u.banned_until,
+          created_at: u.created_at,
+          createdAt: u.created_at,
+        };
       });
 
       return res.json({
         success: true,
-        data: users,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        data: formattedUsers,
       });
     } catch (error: any) {
       console.error('[AdminController.getUsersList]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/admin/users/:id/status
+   * POST /api/v1/admin/users/:id/status
+   * Toggle user active/blocked status
+   */
+  public static async updateUserStatus(req: Request, res: Response) {
+    try {
+      const userId = req.params.id || (req.params as any).userId;
+      const { status, is_blocked, reason } = req.body;
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      const shouldBlock = status === 'BLOCKED' || is_blocked === true || status === 'blocked';
+      const permanentBanDate = new Date('2099-12-31T23:59:59.000Z');
+      const bannedUntil = shouldBlock ? permanentBanDate : null;
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          is_blocked: shouldBlock,
+          is_banned: shouldBlock,
+          banned_until: bannedUntil,
+        },
+      });
+
+      if (shouldBlock) {
+        await prisma.userBan.create({
+          data: {
+            user_id: userId,
+            reason: reason || 'Заблокирован администратором через панель управления пользователями',
+            banned_until: permanentBanDate,
+            is_resolved: false,
+          },
+        });
+      } else {
+        await prisma.userBan.updateMany({
+          where: { user_id: userId, is_resolved: false },
+          data: { is_resolved: true },
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: shouldBlock
+          ? `Пользователь "${updatedUser.full_name}" успешно заблокирован`
+          : `Пользователь "${updatedUser.full_name}" успешно разблокирован`,
+        data: {
+          id: updatedUser.id,
+          full_name: updatedUser.full_name,
+          status: shouldBlock ? 'BLOCKED' : 'ACTIVE',
+          is_blocked: shouldBlock,
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.updateUserStatus]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/admin/users/:id/role
+   * POST /api/v1/admin/users/:id/role
+   * Update user role (ADMIN, SCHOOL, USER)
+   */
+  public static async updateUserRole(req: Request, res: Response) {
+    try {
+      const userId = req.params.id || (req.params as any).userId;
+      const { role } = req.body;
+
+      if (!role) {
+        return res.status(400).json({ success: false, message: 'Укажите новую роль (ADMIN, SCHOOL, USER)' });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      let dbRole = 'client';
+      const roleUpper = role.trim().toUpperCase();
+      if (roleUpper === 'ADMIN') {
+        dbRole = 'admin';
+      } else if (roleUpper === 'SCHOOL' || roleUpper === 'TEACHER') {
+        dbRole = 'school';
+      } else {
+        dbRole = 'client';
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { role: dbRole },
+      });
+
+      const roleLabels: Record<string, string> = {
+        admin: 'Admin (Администратор)',
+        school: 'School (Школа)',
+        client: 'User (Пользователь)',
+      };
+
+      return res.json({
+        success: true,
+        message: `Роль пользователя "${updatedUser.full_name}" успешно изменена на "${roleLabels[dbRole] || roleUpper}"`,
+        data: {
+          id: updatedUser.id,
+          full_name: updatedUser.full_name,
+          role: roleUpper === 'SCHOOL' ? 'SCHOOL' : (roleUpper === 'ADMIN' ? 'ADMIN' : 'USER'),
+          dbRole: updatedUser.role,
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.updateUserRole]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/users/:id/reset-password
+   * Set new password for user by administrator
+   */
+  public static async adminResetPassword(req: Request, res: Response) {
+    try {
+      const userId = req.params.id || (req.params as any).userId;
+      const { password, newPassword } = req.body;
+      const targetPassword = (password || newPassword || '').trim();
+
+      if (!targetPassword || targetPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Пароль должен содержать минимум 6 символов',
+        });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      const password_hash = await bcrypt.hash(targetPassword, 10);
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          password_hash,
+          reset_password_token: null,
+          reset_password_expires: null,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: `Пароль для пользователя "${user.full_name}" успешно изменен`,
+      });
+    } catch (error: any) {
+      console.error('[AdminController.adminResetPassword]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/admin/users/:id/email
+   * POST /api/v1/admin/users/:id/email
+   * Update user email by administrator
+   */
+  public static async updateUserEmail(req: Request, res: Response) {
+    try {
+      const userId = req.params.id || (req.params as any).userId;
+      const { email } = req.body;
+      const targetEmail = (email || '').trim().toLowerCase();
+
+      if (!targetEmail || !EMAIL_REGEX.test(targetEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Укажите корректный адрес электронной почты (например, user@example.kz)',
+        });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      // Check if email already used by someone else
+      const existing = await prisma.user.findFirst({
+        where: {
+          email: targetEmail,
+          id: { not: userId },
+        },
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Данный Email уже привязан к другому пользователю',
+        });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: targetEmail,
+          pending_email: null,
+          email_verification_code: null,
+          email_verification_expires: null,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: `Email пользователя "${updatedUser.full_name}" успешно обновлен на "${targetEmail}"`,
+        data: {
+          id: updatedUser.id,
+          full_name: updatedUser.full_name,
+          email: updatedUser.email,
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.updateUserEmail]', error);
       return res.status(500).json({ success: false, message: error.message });
     }
   }
@@ -640,6 +934,7 @@ export class AdminController {
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
+          is_blocked: true,
           is_banned: true,
           banned_until: bannedUntil,
         },

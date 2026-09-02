@@ -9,17 +9,19 @@ generator client {
 
 model User {
   id                String         @id @default(uuid())
-  iin               String         @unique
-  phone_number      String         @unique
+  iin               String?        @unique
+  phone_number      String?        @unique
   full_name         String
-  birth_date        DateTime
-  gender            String         // 'male' | 'female'
-  role              String         @default("client") // 'client' | 'admin'
+  birth_date        DateTime?
+  gender            String?        // 'male' | 'female'
+  role              String         @default("client") // 'client' | 'admin' | 'school'
   is_blocked        Boolean        @default(false)
   is_banned         Boolean        @default(false)
   banned_until      DateTime?
-  password_hash     String
+  password_hash     String?
   email                       String?        @unique
+  google_id                   String?        @unique
+  auth_provider               String?        @default("local") // 'local' | 'google'
   pending_email               String?        @map("pending_email")
   email_verification_code     String?        @map("email_verification_code")
   email_verification_expires  DateTime?      @map("email_verification_expires")
